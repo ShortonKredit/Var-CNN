@@ -1,0 +1,1710 @@
+Proceedings on Privacy Enhancing Technologies ; 2019 (4):292–310
+Sanjit Bhat*, David Lu, Albert Kwon, and Srinivas Devadas
+Var-CNN: A Data-Eﬃcient Website
+Fingerprinting Attack Based on Deep Learning
+Abstract: In recent years, there have been several works
+that use website ﬁngerprinting techniques to enable a
+local adversary to determine which website a Tor user
+visits. While the current state-of-the-art attack, which
+uses deep learning, outperforms prior art with medium
+to large amounts of data, it attains marginal to no ac-
+curacy improvements when both use small amounts of
+trainingdata.Inthiswork,weproposeVar-CNN,aweb-
+site ﬁngerprinting attack that leverages deep learning
+techniques along with novel insights speciﬁc to packet
+sequenceclassiﬁcation.Inopen-worldsettingswithlarge
+amounts of data, Var-CNN attains over 1% higher true
+positive rate (TPR) than state-of-the-art attacks while
+achieving 4×lowerfalsepositiverate(FPR).Var-CNN’s
+improvements are especially notable in low-data scenar-
+ios,whereitreducestheFPRofpriorartby3.12%while
+increasing the TPR by 13%. Overall, insights used to
+develop Var-CNN can be applied to future deep learn-
+ing based attacks, and substantially reduce the amount
+of training data needed to perform a successful website
+ﬁngerprinting attack. This shortens the time needed for
+data collection and lowers the likelihood of having data
+staleness issues.
+Keywords: website ﬁngerprinting, deep learning,
+anonymity
+DOI 10.2478/popets-2019-0070
+Received 2019-02-28; revised 2019-06-15; accepted 2019-06-16.
+1 Introduction
+Due to increases in mass surveillance and other at-
+tacks on privacy, many Internet users have turned to
+Tor [11] to protect their anonymity. Over the years, Tor
+has grown to over 6,000 volunteer servers and 4 million
+daily users [9]. Tor protects its users’ identities by rout-
+*Corresponding Author: Sanjit Bhat: MIT PRIMES,
+E-mail: sanjit.bhat@gmail.com
+David Lu: MIT PRIMES, E-mail: davidboxboro@gmail.com
+Albert Kwon: MIT, E-mail: kwonal@mit.edu
+Srinivas Devadas: MIT, E-mail: devadas@mit.eduing each packet through a number of Tor servers. Each
+server learns only the immediate hop before and after
+itself, and as a result, no single server learns both the
+identity of the user and the destination of the packet.
+Unfortunately, Tor does not provide anonymity
+against a powerful global adversary who can monitor
+a signiﬁcant portion of the traﬃc due to traﬃc analysis
+attacks. In such attacks, the adversary monitors traﬃc
+entering and leaving the Tor network. Then, she uses
+traﬃc patterns such as packet sequences to correlate
+packets across the two ends of the network and deter-
+mine the identities of the two communicating parties.
+Recently, a variant of the traﬃc analysis attack called
+thewebsite ﬁngerprinting (WF) attack allows an adver-
+sary who observes only the connection between the user
+and the Tor network to identify which website the user
+visits. To do so, the adversary ﬁrst learns the traﬃc
+patterns of certain websites, creating a unique digital
+ﬁngerprint for each site. Then, the adversary compares
+these ﬁngerprints to a user’s network traﬃc (typically
+using machine learning algorithms) to determine which
+website the user visits.
+Most prior WF attacks [4, 6, 7, 16, 18, 19, 30, 32, 34,
+35, 40, 43, 44] use manually extracted features to carry
+out the attack. That is, the attacker carefully studies
+diﬀerent protocols such as HTTP and Tor, and manu-
+ally determines features that could potentially identify
+a website from a network trace (e.g., the total number
+of packets and the total transmission time). While these
+attacks achieved good accuracy in many settings, it re-
+mains diﬃcult to generalize the attacks across diﬀerent
+protocols or reason about their strengths, since the at-
+tacker must manually specify the features.
+Recently, deep learning neural networks have be-
+come the state-of-the-art machine learning technique
+in several diﬀerent domains such as Computer Vision
+and Natural Language Processing [28]. While they can
+take in standard manually extracted features, one of
+their main advantages is their ability to automatically
+learn salient features just by analyzing input and out-
+put pairs. This provides them the opportunity to dis-
+cover more powerful features than previously known,
+achieving higher accuracy. Current state-of-the-art WF
+attacks [36, 38] indeed outperform prior manual feature
+arXiv:1802.10215v2  [cs.CR]  23 Jul 2019
+
+Var-CNN 293
+extraction attacks in settings with suﬃcient amounts of
+data.
+One signiﬁcant drawback of deep learning, however,
+is that it generally requires a large amount of training
+data. As a result, deep learning WF attacks have strug-
+gled to outperform traditional WF attacks in low-data
+scenarios . The current best deep learning WF model
+by Sirinam et al., for example, achieves similar results
+as CUMUL, the state-of-the-art manual feature extrac-
+tion attack, when both use small amounts of training
+data [38]. Performance issues in low-data scenarios can
+be a serious issue for WF attacks: since website traces
+change quickly (i.e., in the span of a few hours to a few
+days), the attacker must frequently update her database
+of traces to match user traﬃc [24]. Consequently, the
+adversary naturally needs to be stronger to collect the
+largeramountsoftracesrequiredfordeeplearningbased
+attacks, which weakens the attack in practice.
+1.1 Our Contributions
+In this work, we focus on answering the following ques-
+tion:
+Can deep learning WF attacks achieve improved ac-
+curacy over prior state-of-the-art WF attacks even with
+small amounts of training data?
+We answer this question aﬃrmatively using our new
+attack called Var-CNN, a semi-automated feature ex-
+traction (i.e., beneﬁtting from both manual feature ex-
+traction and automated feature extraction) WF attack
+based on deep learning. To the best of our knowledge,
+Var-CNN is the ﬁrst deep learning WF attack speciﬁ-
+cally tailored to network packet sequence classiﬁcation.
+Var-CNN’s base architecture uses ResNets [17], state-of-
+the-art convolutional neural networks (CNNs) in Com-
+puter Vision. Beyond the standard model architecture,
+Var-CNN uses the following key insights about the na-
+ture of packet sequences to achieve high performance:
+1. Packet sequences have a fundamentally diﬀerent
+structure than images or other datasets tradition-
+ally classiﬁed using CNNs. For instance, numerical
+digitsintheMNIST[29]datasetarecomposedofin-
+dividual edges that can be detected by small feature
+detectors.Packets,ontheotherhand,typicallyhave
+amoreintertwined,globalrelationship(e.g.,packets
+at the beginning of a trace can cause a large ripple
+eﬀect throughout the whole trace). Unfortunately,
+simply increasing the size of individual feature de-
+tectorsresultsinanunwieldyincreaseinthecompu-
+tational and memory overhead. Instead, we explorethe use of dilated causal convolutions , a variation
+found in Audio Synthesis [42] and Computational
+Biology [15] research, to exponentially increase fea-
+ture detector size without increasing runtime (§4.3).
+2. Unlike Computer Vision model inputs, which are
+highly abstract, network packet sequences naturally
+leak some cumulative statistical information such as
+the total number of packets, total time, etc. Al-
+though these manually extracted cumulative fea-
+tures achieve poor standalone accuracy, we over-
+come this problem by combining them with our
+dilated ResNet during training rather than after.
+This allows Var-CNN to be the ﬁrst deep learning
+WF attack that combines both manually extracted
+and automatically extracted features to improve the
+model’s overall performance (§4.4).
+3. To the best of our knowledge, packet timing infor-
+mation has only been used minimally in prior art
+WF attacks. In contrast, the input generality and
+power from ResNets and dilated causal convolu-
+tions allow us to retain performance under a domain
+change from direction information to packet timing
+information , showing that timing leaks a signiﬁcant
+amount of information (§4.5). Moreover, we show
+that combining the direction and timing informa-
+tion of a packet sequence results in a more accurate
+overall model (§4.6).
+ByincorporatingtheabovethreeinsightsintoVar-CNN,
+we achieve substantial improvements over prior art in
+both the open- and closed-world in every experimental
+scenario tested. For instance, with 900 monitored sites
+and 2500 monitored traces per site in our largest closed-
+world,Var-CNNimprovespriorartaccuracyfrom96.5%
+to 98.8%. In our largest open-world setting tested, Var-
+CNN attains over a 1% better true positive rate (TPR)
+than prior art while achieving a 4×lower false positive
+rate (FPR).
+In addition, Var-CNN has signiﬁcant improvements
+over prior art in settings with small amounts of train-
+ing data, making the WF attack easier to carry out by
+weaker attackers. For instance, with 100 traces for each
+of 100 monitored sites in a low-data closed-world, Var-
+CNN achieves 97.8% accuracy, whereas it would take
+prior art 5×as much training data to achieve a compa-
+rable accuracy of 98.1%. In a low-data open-world with
+just 60 monitored traces and 6000 unmonitored training
+traces, Var-CNN reduces prior-art FPR by 3.12% while
+increasing TPR by 13%. In §6.2, we provide an intu-
+itive explanation for why Var-CNN works well in these
+settings. Moreover, although we used ResNets here as
+
+Var-CNN 294
+User 
+Adversary Tor Network Websites 
+Fig. 1.The website ﬁngerprinting threat model.
+our baseline CNN architecture, many of our insights are
+architecture-independentandthuscanbeappliedtoany
+future deep learning-based attack.
+2 Background and threat model
+Tor [11] consists of decentralized volunteer servers that
+relay their users’ packets without any delays or cover
+traﬃc. While this has allowed Tor to scale to a large
+number of users, this also enables adversaries monitor-
+ing traﬃc entering and leaving the Tor network to po-
+tentially deanonymize users. In particular, the website
+ﬁngerprinting (WF) threat model allows an adversary
+to monitor just the connection between a user and the
+network, as shown in Figure 1. The adversary is a pas-
+sive observer, meaning she will not drop, modify, or in-
+sert any packets. Examples of such adversaries include
+routers, internet service providers, autonomous services,
+and compromised Tor servers.
+The adversary is interested in identifying visitors of
+a number of websites, which we call monitored websites;
+we call all other websites unmonitored websites. The ad-
+versary visits the websites on her own and creates a
+database of traces, sequences of packets and their times-
+tamps generated while visiting a website. From here on,
+we refer to whether a packet was incoming or outgoing
+as direction data and the time delay between two con-
+secutive packets as time data. Once the database is cre-
+ated, the adversary monitors and collects users’ traces
+and uses the database to classify them as belonging to
+either the monitored or unmonitored set of websites.
+2.1 Attacker settings
+We consider two diﬀerent attacker settings, closed-world
+and open-world.Closed-world. In this setting, we assume that
+users only visit a well-known set of monitored web-
+sites. Here, the adversary trains on a number of traces
+from these sites and aims to classify diﬀerent traces
+from the training set into one of the monitored web-
+sites. We use accuracy to deﬁne the eﬀectiveness of the
+attacker, which is simply the proportion of monitored
+traces correctly identiﬁed. Although the closed-world is
+less realistic—it assumes the adversary knows every site
+a user visits—it is a useful measure of a classiﬁer’s abil-
+ity to distinguish between websites.
+Open-world. In the real world, users can visit web-
+sites that the adversary does not know. Open-world set-
+tings emulate this scenario by allowing users to visit
+bothmonitoredandunmonitoredwebsites(i.e.,websites
+that the adversary does not deem sensitive). Just like in
+the closed-world, the adversary trains on diﬀerent traces
+from those being tested on. In addition, the adversary
+can bias her classiﬁer by training on some number of
+unmonitored sites. Though there is no overlap between
+unmonitored training and testing sites, learning how to
+distinguish one set of unmonitored sites often helps with
+others, as we will see empirically in §5.2.4.
+In the open-world setting, we use three metrics
+to measure classiﬁcation performance, two-class true
+positive rate (Two-TPR), multi-class true positive rate
+(Multi-TPR), and false positive rate (FPR). Two-TPR
+is the proportion of monitored traces correctly classiﬁed
+as any monitored site, and it applies to an adversary
+who only cares about identifying users who visit the
+monitored class in general. Multi-TPR is the ratio of
+monitored traces correctly classiﬁed as a speciﬁc moni-
+tored site. An adversary using this metric might assign
+diﬀerent penalties to diﬀerent monitored sites. Finally,
+FPR, the ratio of unmonitored traces incorrectly classi-
+ﬁed as a monitored site, measures the adversary’s level
+of false identiﬁcation.
+2.2 Assumptions
+Prior WF attacks and Var-CNN assume the follow-
+ing [24]:
+–Replicability. Given the uncertainty of real user
+conditions, the WF attacker assumes her training
+data will be representative of actual Tor traﬃc se-
+quences.
+–Applicability. The adversary assumes she can ap-
+ply the WF attack eﬀectively in practice.
+
+Var-CNN 295
+There are, however, several criticisms regarding these
+assumptions. First, the replicability assumption may be
+too strong for a few reasons:
+1. Unless sites with dynamic content changes such as
+AJAX or Javascript are adequately represented in
+the training set, the adversary would believe a non-
+static page is actually static.
+2. Training on one Tor Browser version while a user
+uses a diﬀerent version could possibly result in dif-
+ferent underlying protocols being used.
+3. Varying latency in Tor connections causes diﬀerent
+inter-packet timings.
+4. The types of websites the adversary trains on may
+not match the types of websites real users visit. For
+instance, the adversary might train her classiﬁer on
+Alexa’s most popular sites [1] whereas real Tor users
+might visit more private sites.
+Second, the applicability assumption faces the following
+issues:
+1. The adversary might not know when traﬃc from
+one website starts or stops, or whether a user visits
+multiple websites at the same time.
+2. Noise traﬃc (e.g., from listening to music or down-
+loading a ﬁle in the background) might confuse an
+attacker.
+While some work has been done in applicability such
+as learning how to split traces and remove background
+noise [45], there remain important problems in replica-
+bility due to the privacy concerns of collecting realistic
+datasets from actual Tor users. Our work does touch
+upon the replicability concern of data freshness with dy-
+namic websites, showing that deep learning attacks can
+perform well with small amounts of training data. How-
+ever, we acknowledge that, similar to most prior work
+on WF attacks [6, 12, 16, 34, 35, 43, 44], there still ex-
+istreplicabilityandapplicabilityassumptionsthatcould
+make the WF attack less powerful in practice.
+3 Related work
+We now describe prior work in greater detail.
+3.1 Manual feature extraction attacks
+Inthepast,severalWFattackswithmanuallyextracted
+featureshavebeenproposed,eachdirectingattentionto-wards the susceptible components of the protocol stud-
+ied [4, 6, 7, 12, 16, 18, 19, 30, 32, 34, 35, 40, 43, 44]. For
+example, early work used weaknesses in HTTP 1.0 to
+take advantage of distinct resource length leakage, such
+as the size of images, scripts, and videos [7, 19, 40]. Sub-
+sequent protocols hid resource lengths, so later attacks
+focused instead on extracting information from packet
+lengths leaked by HTTP 1.1, VPNs, and SSH tunnel-
+ing [4, 18, 30, 32]. Since then, Tor and other anony-
+mous networks that hide packet lengths have emerged.
+Consequently, attacks in the last few years have fo-
+cused on using a broad set of manually extracted fea-
+tures [6, 12, 35, 44]. For example, Wang et al. used a
+modiﬁedk-Nearest Neighbors ( k-NN) classiﬁer with a
+weight adjustment system to eﬀectively train on a wide
+feature set [43], including packet lengths, packet or-
+derings, packet concentrations, and bursts. Panchenko
+et al. developed CUMUL, a Support Vector Machine
+(SVM) that mainly relied on cumulative packet length
+features [34]. Finally, Hayes et al. in their k-FP attack
+used a slightly smaller feature set than Wang et al. and
+fed it into a Random Forest classiﬁer, an ensemble of
+Decision Trees [16]. After training the Random Forest,
+they fed the output into a vanilla k-NN classiﬁer to con-
+trol TPR and FPR. Currently, Panchenko et al.’s CU-
+MUL [34] is the best performing manual feature extrac-
+tion attack in vanilla WF settings, achieving 97.3% ac-
+curacy in a small closed-world with a large number of
+traces [38].
+While manual feature extraction attacks work well
+in some settings, they are fundamentally restricted by
+their feature set. For instance, Hayes et al. pointed out
+that since CUMUL primarily relies on packet ordering,
+it suﬀers signiﬁcant decreases in accuracy against sim-
+ple defenses that perturb this information [16]. In ad-
+dition, even though a broad feature set as in Hayes et
+al.’sk-FP [16] and Wang et al.’s k-NN [43] mitigates in-
+formation loss to a defense, these attacks are still only
+as good as their feature set. For instance, while neither
+could eﬀectively use timing, our model achieves a non-
+trivial increase in performance when incorporating tim-
+ing. This exempliﬁes how diﬃcult it can be for humans
+to manually extract features.
+3.2 Automated feature extraction attacks
+Recently, a few authors have proposed work on auto-
+mated feature extraction (AFE) WF attacks using deep
+learning neural networks [3, 36]. Compared to tradi-
+tional attacks, these attacks perform AFE over raw in-
+
+Var-CNN 296
+put sequences, removing the need for feature design.
+In an earlier work, Abe and Goto [3] used a stacked-
+denoising autoencoder (SDAE), a neural network that
+tries to create a compressed version of its input, to per-
+form AFE. Their model performed worse than Wang
+et al.’sk-NN with manual features. Later, Rimmer et
+al. [36] studied preliminary applications of SDAEs, re-
+currentneuralnetworks(RNNs),andconvolutionalneu-
+ral networks (CNNs) and showed that AFE models can
+slightly outperform prior art when using large amounts
+of training data.
+The current state-of-the-art WF attack is Sirinam
+et al.’s [38] Deep Fingerprinting (DF) attack, which
+uses a CNN architecture similar to Simonyan et al.’s
+VGG model [37]. DF showed improvements over prior
+art in both closed- and open-world settings. However,
+with small amounts of training data (i.e., less than 200
+traces in a closed-world with 95 monitored sites), DF
+achieved marginal to no improvements over prior art,
+with both attacks at around 90% accuracy when using
+50 traces [38]. Even so, to the best of our knowledge DF
+is currently the strongest attack to date in all domains.
+Thus, we note several key diﬀerences between Var-CNN
+and DF:
+– We employ several novel insights speciﬁc to packet
+sequence classiﬁcation including dilated causal con-
+volutions, cumulative statistical information, and
+timing data (§4).
+– We show that Var-CNN outperforms DF in every
+open- and closed-world setting tested, regardless of
+the amount of data used (§5).
+– Our model has noticeable improvements in settings
+with small amounts of training data. This is signiﬁ-
+cant because of the following reasons:
+1. Deep learning models typically do not work well
+with smaller training sets.
+2. Smaller training sets result in faster training
+times.
+3. Smaller training sets directly correspond to less
+work for the adversary as she needs fewer re-
+sources and less time to collect a database.
+The last point in particular strengthens WF attacks
+by allowing weaker adversaries to launch success-
+ful WF attacks and by reducing the chance of data
+staleness.4 Var-CNN: Model variations on
+CNN
+Weﬁrstgiveashortbackgroundonconvolutionalneural
+networks and then present details of Var-CNN.
+4.1 Convolutional neural networks
+Convolutional neural networks are part of a class of ma-
+chine learning techniques called deep learning. Unlike
+traditional machine learning, deep learning has the ex-
+pressive power to automatically extract features from
+raw input data by using several hidden layers and non-
+linearactivationfunctionssuchasReLUs[28].Inourap-
+plication, we use a convolutional neural network (CNN)
+due to its hierarchical abstraction of features and reuse
+offeaturesthroughlocalconnectivity.CNNs,whichcon-
+sistofthreebasictypesoflayers,canexpresscomplexre-
+lationships between locally-deﬁned features to construct
+more abstract features [27].
+Speciﬁcally, convolutional layers make use of input
+translationalinvariance(i.e.,afeatureappearinginmul-
+tiple places) to have locally-connected ﬁlters convolve
+over the entire input and create feature maps. By de-
+fault, each ﬁlter spans a small receptive ﬁeld , which will
+be further discussed in §4.3. Pooling layers combine ad-
+jacent activations from feature maps and downsample
+their input. Finally, fully-connected layers at the end of
+the network do away with local connectivity to have ev-
+ery neuron connected to every neuron in the prior layer.
+InrecentCNNs[17,41],fully-connectedlayershaveonly
+been used in the ﬁnal softmaxlayer since they introduce
+a large number of additional parameters. The softmax
+layer, discussed in §4.7, represents a probability distri-
+bution over the set of possible classes and gives the net-
+work’s conﬁdence in a certain prediction.
+4.2 Var-CNN baseline architecture
+Our baseline CNN architecture (Figure 2) is based
+on the state-of-the-art CNN for Computer Vision,
+ResNet [17]. ResNet comes in several diﬀerent sizes, and
+here, we use the smallest variant with just 18 layers to-
+tal to minimize training costs. ResNet-18 has 4 separate
+stages each consisting of 2 convolutional blocks. Each
+block contains 2 convolutional layers with batch nor-
+malization [22] and ReLU non-linearity in-between. In
+addition,thekeyfeatureofResNetsthathelpsintheop-
+
+Var-CNN 297
+ResNet-18 Architecture 
+Input, 1x5000 
+1x7 conv, 64, 1, /2 
+Max pool, /2 
+1x3 conv, 64, 1 
+1x3 conv, 64, 2 
+1x3 conv, 64, 4 
+1x3 conv, 64, 8 
+1x3 conv, 128, 1, /2 
+1x3 conv, 128, 2 
+1x3 conv, 128, 4 
+1x3 conv, 128, 8 
+1x3 conv, 256, 1, /2 
+1x3 conv, 256, 2 
+1x3 conv, 256, 4 
+1x3 conv, 256, 8 
+1x3 conv, 512, 1, /2 
+1x3 conv, 512, 2 
+1x3 conv, 512, 4 
+1x3 conv, 512, 8 
+Global avg pool +
++
++
++
++
++
++
++
+Fig. 2.A graphical model of the Var-CNN baseline CNN architec-
+ture, a ResNet-18, with dilated causal convolutions. The indices
+in each convolutional layer signify the kernel size, the number of
+ﬁlters, the dilation rate, and an optional /2 if that convolution
+downsamples its input by using a stride size of 2 instead of 1.
+Connections with a plus sign next to them indicate skip connec-
+tions, which add the input of a block to its output. A dotted skip
+connection indicates that the input is downsampled before be-
+ing added so that its dimensionality matches that of the block’s
+output.
+timization of larger networks is a residual “skip” connec-
+tion between the input and output of a block. The idea
+here is that deeper networks can be hypothetically cre-
+ated from shallower networks by simply making deeper
+blocks copy previous blocks.
+For instance, consider a regular block that trans-
+forms its input out =F(x), whereF(x)is a series of
+convolution layers and nonlinearities. If the aforemen-
+tioned identity mappings are optimal, then the block
+will have to ﬁt the identity function, something hard
+to do for a sequence of nonlinear layers. On the other
+hand, if we explicitly introduce the identity into each
+block,out =F(x) +x, it is much easier for Stochastic
+Gradient Descent to ﬁt the nonlinear block to zero than
+InputHidden LayerHidden LayerHidden LayerOutputFig. 3.A pictorial representation of regular causal convolutions
+(ﬁgure replicated from Oord et al. [42]). Observe how the recep-
+tive ﬁeld size increases linearly with the number of layers.
+InputHidden LayerDilation = 1Hidden LayerDilation = 2Hidden LayerDilation = 4OutputDilation = 8
+Fig. 4.A pictorial representation of dilated causal convolutions
+(ﬁgure replicated from Oord et al. [42]). Each layer doubles the
+dilation rate, starting from a dilation rate of 1, or normal causal
+convolutions. This results in an exponential increase in receptive
+ﬁeld size compared to a linear increase with normal causal convo-
+lutions (see Figure 3).
+to the identity function [17]. Therefore, residual connec-
+tions add the identity from each block to the output,
+easing larger network optimization. This aids in higher-
+level feature extraction and increases expressive power.
+We train using the Adam optimizer, a variant of
+stochastic gradient descent, to increase computational
+eﬃciency and accelerate convergence [26]. By default,
+our ResNet-18 takes in packet direction information as
+input (i.e., 1’s and -1’s that represent packets going to
+and away from the web server, respectively). In the fol-
+lowing sections, we present our augmentations to the
+baseline ResNet-18.
+4.3 Dilated causal convolutions
+With traditional convolutional operations, ﬁlters in each
+layer convolve with their input volumes to produce fea-
+ture maps. Speciﬁcally, in ResNet-18, each ﬁlter has a
+small receptive ﬁeld of size 3, meaning that it can only
+operate on inputs that are at most two apart from each
+other. Of course, higher-up layers operate on lower lay-
+ers, compounding receptive ﬁeld, but this still results in
+each layer having a receptive ﬁeld that only grows lin-
+early with the number of layers, as shown in Figure 3.
+While a linear increase may be suﬃcient in image
+classiﬁcation problems where the inputs typically con-
+
+Var-CNN 298
+tain smaller and more locally-deﬁned features, packet
+sequences often have a much more long-term and in-
+tertwined structure. For instance, consider classifying a
+human face. Typically, the classiﬁer would ﬁrst detect
+smallerfacialfeaturessuchaseyes,mouth,andears,and
+combine these features at a higher level to detect a face.
+The smaller features happen within local spatial regions
+and can thus be detected with linear receptive ﬁeld in-
+creases. In contrast, when a user contacts a server to
+download data, that might cause a cascading ripple ef-
+fect wherein several hundred streams of packets are sent
+before that one transmission is completed. This insight
+about the long-term and temporally-related nature of
+packet sequences motivates the following exploration of
+dilated convolutions.
+Strictly speaking, a larger increase in receptive ﬁeld
+size could be achieved through uniformly larger ﬁlters.
+However, in practice this results in far more weight pa-
+rameters and thus increases training time and memory.
+RNNs such as Long Short-term Memory Networks [20]
+have also traditionally provided support for temporal
+data, but we found that the length of our packet se-
+quence proved to be prohibitively long for current RNN
+optimization techniques.1
+Instead, we build long-term temporal understand-
+ing into our CNN model by utilizing dilated convolu-
+tions[42, 47], convolutions that skip inputs at a certain
+dilation rate. Intuitively, instead of taking a ﬁne-grain
+view of a small input region, dilated convolutions allow
+the network to take a coarse, wide view of the network,
+as shown in Figure 4. Since the actual ﬁlter used in
+dilated convolutions is still the same as in regular con-
+volutions, the number of parameters and training cost
+do not increase.
+Our model doubles dilation rates in every convolu-
+tional layer until hitting an upper-bound of dilation 8,
+upon which it cycles back to dilation 1 (i.e., dilation
+rates are {1, 2, 4, 8, 1, 2, 4, 8, ...}). Instead of a linear
+increase in receptive ﬁeld size, this results in an expo-
+nentialincrease, albeit for a small number of steps, as
+shown in Figure 4. This technique has shown to be eﬀec-
+tive in Image Segmentation [47], Audio Synthesis [42],
+and Computational Biology [15].
+Finally, as did Oord et al. in their WaveNet
+model [42], we also combine dilated convolutions with
+1We believe that the packet sequence is prohibitively long to
+train on RNNs due to vanishing gradients, wherein the gradient
+updates are essentially lost after backpropagating through such
+a long sequence.causal convolutions, which simply restrict every neuron
+to only look at neurons from previous timesteps. This
+helps Var-CNN better map the inherent temporal de-
+pendencies of packet sequences. For instance, we found
+that using dilated causal convolutions results in an in-
+crease in accuracy from 94% to 96% in a closed-world
+of 100 monitored sites and 90 monitored instances.
+4.4 Cumulative statistical features
+In addition to automatically extracting features from
+the raw data with ResNet-18, we also provide seven ba-
+sic cumulative features to the model. These features in-
+clude the total number of packets, the total number of
+incoming packets, the total number of outgoing packets,
+the ratio of incoming to total packets, the ratio of out-
+going to total packets, the total transmission time, and
+the average number of seconds to send each packet.
+Based on our experiments, a fully-connected layer
+with cumulative features as input achieves only 35% ac-
+curacy in a small closed-world (100 sites, 90 instances).
+Due to the low accuracy, if we combined the meta-
+data input and ResNet-18 post-training by averaging
+their softmax outputs, it would reduce the overall accu-
+racy (see Appendix A for further details). For example,
+in a small closed-world, adding metadata post-training
+results in an accuracy decrease in the dilated causal
+ResNet-18 from 96% to 95%. Instead, we combine the
+fully-connected metadata layer with the ResNet-18 dur-
+ing training by concatenating their outputs, as shown in
+Figure5.Finally,afterconcatenation,thecombinedout-
+put is sent through another fully-connected layer with
+Dropout regularization [39] before going to the ﬁnal
+softmax output. Intuitively, this in-training ensemble
+scheme allows for the ResNet-18 AFE model to auto-
+matically learn how to supplement its strong predictions
+with the weak predictions from cumulative manually ex-
+tracted features. In practice, for a small closed-world,
+this results in an accuracy increase from 96% to 97% for
+the dilated causal ResNet-18. We note that while im-
+provementsseemmarginalinthissmallclosed-worldset-
+ting, they are ampliﬁed in more complex settings where
+accuracies are lower (e.g., see §5.2.1).
+Var-CNN is the ﬁrst WF attack to supplement au-
+tomatically extracted ResNet-18 features with cumula-
+tive manually extracted features. Because of this, we
+consider Var-CNN a semi-automated feature extraction
+model.
+
+Var-CNN 299
+4.5 Inter-packet timing
+To the best of our knowledge, low-level timing data (i.e.,
+thetimestepatwhichapacketwassentoraclosederiva-
+tive of it) has never been eﬀectively used in prior art.
+For instance, Bissias et al. [4] used inter-packet timings
+in an early WF attack. However, compared to prior art
+at the time using diﬀerent features, their attack did not
+perform as well [16]. More recently, Wang et al. [43]
+used total transmission time as one of their features,
+and Hayes et al. [16] did a feature importance study us-
+ing inter-packet times. As shown by Hayes et al., how-
+ever, these low-level time features ranked 40th–70thin
+feature importance, making them essentially useless for
+classiﬁcation.
+Rather than dismiss packet timing, we applied the
+dilated ResNet-18 without metadata (§4.3) and ob-
+served some interesting outcomes. Without changing
+any parameters and only switching direction informa-
+tion with inter-packet times, the ResNet-18 with packet
+timing data achieved accuracy nearly comparable to
+that of a ResNet-18 with direction data (96% to 93%,
+respectively, in a closed-world with 100 sites and 90
+instances). Moreover, by combining it with the basic
+cumulative features described in §4.4, we were able to
+achieve a 1% accuracy improvement from 93% to 94%
+that is on par with what we observed for the direction
+ResNet.
+In contrast to prior work with manually extracted
+timing features, the high accuracy of ResNet-18 with
+timing data indicates that packet timing does leak a
+signiﬁcant amount of information. Apart from the sug-
+gested privacy leakage, Var-CNN with timing data high-
+lightsoneofthekeybeneﬁtsofAFEovermanualfeature
+extraction: performance under domain shifts. Though
+no prior features have been discovered to eﬀectively use
+timing data, the ResNet-18 is both general enough to
+take in any sequence-like input and powerful enough
+(with a strong ResNet architecture and our augmenta-
+tions) to perform well with these inputs.
+As we will see in §5.2.1, ResNet-18 with time data is
+not as accurate as ResNet-18 with direction data. How-
+ever, we describe a way to combine the two in §4.6 to
+improve the performance of the ﬁnal classiﬁer.
+4.6 Ensemble of timing and direction
+In §4.4, we combined the ResNet-18 with cumulative
+features in-training since the fully-connected layer with
+cumulative features alone was far less accurate than
+S1 = 0.5 
+S2 = 0.3 
+UM = 0.2 
+S1 = 0.3 
+S2 = 0.4 
+UM = 0.3 S1 = 0.7 
+S2 = 0.2 
+UM = 0.1 
+Avg TH 
+0.6 UM Dir 
+Time Metadat a
+Metadata 
+Fully-connected Layer + Batch Normalization + ReLU Dilated causal ResNet-18 
+Dropout Fig. 5.A graphical representation of our ensemble model with
+just three output classes, 2 monitored sites and the unmonitored
+(UM) class. Each of the direction and time models is trained
+separately in conjunction with metadata inputs. Finally, the two
+models’ softmax layers are averaged post-training. TH signiﬁes a
+minimum conﬁdence threshold of a certain value over the aver-
+aged softmax outputs. The internals of the dilated causal ResNet-
+18 are shown in Figure 2.
+the ResNet. In contrast, both the time and direction
+ResNets with cumulative features are highly accurate
+(as we will see in §5.2.1). Consequently, we found that
+their accuracy actually dropped (from 97% for the di-
+rection model to 95% for the direction and time model
+in a small closed-world) when combining them during
+training. This is most likely due to overﬁtting caused
+by training on essentially 2×the number of parameters,
+which makes the underlying optimization problem much
+more diﬃcult (see Appendix A for further details).
+Instead, to eﬀectively combine direction and timing,
+wetakethearithmeticmeanoftheirsoftmaxoutputsaf-
+ter training each model separately. This has the advan-
+tage of making each individual optimization procedure
+no more parameter-intensive than the original, single-
+model optimizations. We experimented with other aver-
+aging schemes (see Appendix A for further details) and
+found that even the optimal weighted average (i.e., the
+highestperformingaverageoverthetestset)alwaysused
+each model equally, plus or minus a small /epsilon1. Since a sim-
+ple arithmetic mean is near-optimal, the ﬁnal Var-CNN
+model performs this over the outputs of the ResNet-18
+direction and time models with cumulative features, as
+showninFigure5.In§5.2.1,weprovideempiricalresults
+that show how the averaging scheme described here pro-
+vides consistent improvements over the accuracy of each
+individual model.
+
+Var-CNN 300
+4.7 Conﬁdence threshold
+As the ﬁnal step of our attack, we apply a post-training
+threshold on the softmax probability output of the net-
+work (indicated by the “TH” block in Figure 5). If the
+output class probability is less than this threshold, we
+change the predicted class to the unmonitored class.
+Intuitively, this can be explained as deﬁning a certain
+minimum bound on model certainty before classifying
+a sample. If a model is not certain about its classiﬁca-
+tion as a monitored website, we assume that the testing
+input was really an unmonitored website that only par-
+tially matched a monitored site, and we classify it as
+unmonitored.
+The threshold constraint also allows for direct con-
+trol over TPR and FPR trade-oﬀ. Prior manual fea-
+ture extraction work achieved this using methods such
+as classify-verify [24], using an additional classiﬁer on
+top of features outputted from a primary classiﬁer [16],
+and changing the number of nearest neighbors in k-
+NN [16, 43]. However, in the case of using a diﬀer-
+ent model to perform ﬁnal classiﬁcation, this results in
+increased computational time due to training multiple
+models and decreased accuracy due to information loss
+between the feature extractor and classiﬁer. Additional
+schemes such as classify-verify and adjusting the num-
+ber of nearest neighbors require re-training to adjust
+trade-oﬀs.
+In contrast, Var-CNN allows us to easily adjust
+thresholds post-training. With a threshold of 0, this is
+the equivalent of not applying any model constraint.
+When the threshold is 1, we restrict the network to only
+classify websites as monitored if it is 100% certain, de-
+creasing the number of true positives and false positives.
+We discuss empirical results for the TPR-FPR trade-oﬀ
+in §5.2.2. We further note that since conﬁdence thresh-
+olds result from having a ﬁnal discrete softmax proba-
+bility output, both Rimmer et al.’s [36] and Sirinam et
+al.’s [38] deep learning-based attacks have them.
+5 Var-CNN evaluation
+In this section, we describe our experimental setup and
+evaluate Var-CNN.5.1 Experimental setup
+5.1.1 Dataset
+Unfortunately, Sirinam et al.’s dataset was not available
+at the time of writing. Instead, we evaluate our attack
+on the Rimmer et al. dataset [36], which was publicly
+available. However, since the public dataset does not
+have enough information to extract inter-packet time
+and metadata, we processed their unﬁltered dataset,
+which we obtained upon request.
+This dataset has a total of 900 monitored sites each
+with 2,500 traces. For open-world, there are a total of
+500,000 additional unmonitored sites, each with only 1
+trace. Both the monitored and unmonitored pages were
+compiled from the Alexa list of most popular sites [1],
+and with over 2.75 million total traces, it is one of the
+largest and most up-to-date WF datasets in existence.
+For each of our three diﬀerent models, we feed in a
+diﬀerent set of features representing a given trace. The
+direction ResNet-18 takes in a set of 1’s and -1’s that
+represents the direction of each packet. The numbers
+1 and -1 respectively denote outgoing packets (which
+travel toward the web server) and incoming packets
+(which travel toward the client). The time ResNet-18
+takes in a sequence of ﬂoats that represent the time
+delay between when a current packet and the previous
+packet is sent. The metadata model takes in seven ﬂoats
+(for the seven cumulative statistical features described
+in §4.4). Since CNNs only take in a ﬁxed-length input,
+we pad and truncate each set of inputs to the direc-
+tion and time models to the ﬁrst 5,000 values. This is
+consistent with prior work [36, 38] and strikes a balance
+between the computational overhead of larger sequences
+and the information loss of smaller sequences.
+5.1.2 Training/Validation/Test Split
+In all our experiments, we use the exact same train-
+ing, validation, and test data for both Var-CNN and
+DF [38]. Although manually extracted attacks used
+cross-validation on smaller datasets [16, 34, 43], this
+is computationally infeasible on our larger dataset. In-
+stead, we follow the best practices of the deep learning
+community and the practices of Sirinam et al. [38] and
+split data into a training, validation, and test set. No
+random data split favors any model because we use the
+same split for both models.
+Inalloursettings,weusedarandom10%ofallmon-
+itored traces (i.e., 10% of the traces from each website)
+
+Var-CNN 301
+for testing and a random 5% of the remaining 90% of all
+monitored traces (regardless of website) for validation.
+While the number of unmonitored training and testing
+sites diﬀers with every setting, we use a random 5% of
+all unmonitored training sites for validation. There is
+no overlap between data used for training, validation,
+and testing. In addition, note that we use the validation
+set to time learning rate decays and stop model training
+(see Appendix A.2 for further details).
+5.1.3 Model Implementation
+To implement Var-CNN, we use Keras [8] with the Ten-
+sorFlow [2] backend. As Sirinam et al.’s code was not
+available at the time of writing, we reimplemented their
+model with their guidance in the same Keras and Ten-
+sorﬂow environment they used [38]. Given that neural
+networks train several times faster on GPUs due to data
+parallelism, we run our experiments on NVIDIA GTX
+1080Ti workstations at our organization with 11 GB of
+GPU memory.
+5.1.4 Hyperparameter Tuning
+To determine hyperparameters for Var-CNN, we sys-
+tematically go through each hyperparameter, sweeping
+a certain range of values while keeping all other hy-
+perparameters constant. After ﬁnding a well-performing
+value, we ﬁx it and then test other hyperparameters. As
+mentioned in §4, we measure performance using accu-
+racy on the test set for a small closed-world with 100
+sites and 90 instances. After selecting hyperparameters
+(e.g., architecture, regularization, and starting learning
+rate) on this small closed-world, we ﬁx them for all sub-
+sequent open- and closed-world evaluations in §5.2. Our
+main reason for selecting hyperparameters once using a
+small dataset was to increase the speed of our research,
+and we reported closed-world accuracies in §4 simply to
+provide a metric for the performance diﬀerences of var-
+ious Var-CNN architectural choices, not as a point of
+comparison against other attacks.
+For further details on the speciﬁc parameters we
+used and for additional information on model design
+choices that worked and did not work, see Appendix A.
+Note that our parameter search was by no means ex-
+tensive, especially for the ResNet-18 with packet timing
+data. It is entirely possible that diﬀerent Var-CNN con-
+ﬁgurations perform diﬀerently on direction data versus
+time data, but we made a simplifying assumption to
+102
+103
+Monitored Traces
+84
+86
+88
+90
+92
+94
+96
+98
+100Accuracy
+Var-CNN Direction
+Var-CNN Time
+Var-CNN EnsembleFig. 6.Closed-world accuracies of Var-CNN direction, Var-CNN
+time, and Var-CNN ensemble. Experiments are run with 100 mon-
+itored sites and a varying number of traces per site. Accuracies
+are in % and the x-axis is logarithmically scaled.
+use the same conﬁguration. In addition, this showcases
+Var-CNN’sinputgeneralityandhighperformanceunder
+domain changes.
+5.2 Experimental results
+In this section, we discuss our various experiments and
+their implications.
+5.2.1 Comparison of Var-CNN variants
+We ﬁrst compare the three diﬀerent conﬁgurations of
+Var-CNN: direction, time, and ensemble.
+Figure 6 shows accuracies for these three conﬁgura-
+tions as we change the number of monitored traces in
+a closed-world setting. First, we observe that while the
+time model always gets less accuracy than the direction
+model, both are still highly comparable. For instance,
+with 1000 traces, the accuracy diﬀerence is only 0.9%,
+meaning both models are highly accurate. While prior
+art was unable to eﬀectively use low-level timing data
+(§4.5), we show that AFE can take advantage of this in-
+formation. Var-CNN eﬀectively classiﬁes websites solely
+based on timing data without any major modiﬁcations.
+Second, the ensemble model combining direction
+and time always has higher accuracy than either of its
+constituents. While this may seem obvious at ﬁrst—
+two models must always be better than one—it suggests
+that the two models seem to complement each other’s
+predictions. If both were highly conﬁdent on the exact
+same predictions, then the ensemble created by averag-
+ing their outputs would not improve. Instead, it appears
+that there are some situations where one model is more
+conﬁdent than the other, and vice-versa. These situa-
+
+Var-CNN 302
+0.0
+ 0.5
+ 1.0
+ 1.5
+ 2.0
+ 2.5
+ 3.0
+FPR
+94
+95
+96
+97
+98Multi-TPR
+DF
+Var-CNN
+Fig. 7.The TPR and FPR trade-oﬀ for an open-world setting
+with 100 monitored sites, 1,500 monitored traces, 150,000 un-
+monitored training sites, and 100,000 unmonitored testing sites.
+Multi-TPR and FPR are in % and the upper left corner is the
+best. Data points farther up and to the right use lower conﬁdence
+thresholds.
+tionsaverageoutsuchthattheensemblemodelproduces
+better overall predictions than either of its constituents.
+5.2.2 TPR-FPR trade-oﬀ
+As discussed in §4.7, Var-CNN allows TPR-FPR trade-
+oﬀ by changing the conﬁdence threshold post-training.
+Using a higher conﬁdence threshold, the attacker can
+lower FPR by assuming that traces predicted as a mon-
+itored site with low conﬁdence are actually false pos-
+itives. This greedy scheme naturally causes true neg-
+atives, i.e., monitored traces classiﬁed as unmonitored
+due to their relative dissimilarity to other monitored
+traces. A similar technique can also be applied to DF,
+and in Figure 7, we plot this trade-oﬀ for both attacks
+in our largest open-world setting tested.
+As can be seen, both TPR and FPR decrease as the
+conﬁdence threshold increases and the graph goes to the
+bottom left. For instance, with a threshold of 0.5, Var-
+CNNhasa98.01%Multi-TPRanda0.36%FPR.Asthe
+threshold increases to 0.9, Var-CNN’s TPR goes down
+to 93.68% but its FPR also goes down to 0.10%. With
+100,000 unmonitored testing sites, this is a reduction of
+260 false positives to only 100 false positives compared
+to the initial 360 false positives.
+Another interesting trend is the diﬀerence between
+Var-CNN and DF FPR for the same Multi-TPR. When
+both attacks use a threshold of 0, for nearly the same
+TPR, DF has an FPR of 3.28%, which is over 7×that
+of Var-CNN at 0.45%. In addition, this diﬀerence gets
+larger for increasing Multi-TPR, indicating that Var-
+CNN has signiﬁcant FPR beneﬁts when the attacker
+needs to maximize TPR.
+102
+103
+Monitored Traces
+80.0
+82.5
+85.0
+87.5
+90.0
+92.5
+95.0
+97.5
+100.0Accuracy
+DF
+Var-CNNFig. 8.Var-CNN and DF closed-world accuracy as a function of
+the number of monitored traces for each of 100 monitored sites.
+Results are in % and the x-axis is logarithmically scaled.
+100
+ 200
+ 300
+ 400
+ 500
+ 600
+ 700
+ 800
+ 900
+Monitored Sites
+96.5
+97.0
+97.5
+98.0
+98.5
+99.0
+99.5Accuracy
+DF
+Var-CNN
+Fig. 9.Var-CNN and DF closed-world accuracies for larger set-
+tings with 2500 monitored traces and a varying number of moni-
+tored sites. Results are in %.
+5.2.3 Closed-world performance
+We now consider closed-world experiments with varying
+amounts of training data. Figure 8 shows Var-CNN and
+Deep Fingerprinting accuracy as the number of traces
+increases for each of 100 monitored sites. First, observe
+Var-CNN’shighaccuracyeveninsettingswithrelatively
+small numbers of traces. For instance, with 100 traces,
+Var-CNN achieves 97.8% accuracy while DF achieves
+93.6% accuracy. It would take 5×as much training data
+(i.e., 500 traces) for DF to achieve a comparable accu-
+racy of 98.1%.
+In general, this accuracy diﬀerence does not stay
+stagnant over time. Rather, Var-CNN’s accuracy im-
+provements tend to increase as the number of traces de-
+creases. For example, at 2000 traces, our largest amount
+tested, there is a 0.39% accuracy gap. This increases to
+0.8% with 500 traces, 2.1% with 200 traces, 4.2% with
+100 traces, 6.8% with 50 traces, and 11.75% with 40
+traces.
+As shown in Figure 9, Var-CNN also has large accu-
+racy increases in closed-world settings with many sites
+and a large number of traces per site. For instance, with
+just 100 sites and 2500 traces, both attacks achieve near
+
+Var-CNN 303
+comparable accuracy with a diﬀerence of 0.3%. How-
+ever, as the number of monitored sites increases with no
+additional traces, the gap between Var-CNN and DF ac-
+curacy also increases to 0.6% with 200 sites (99.5% com-
+pared to 98.9%), 1.8% with 500 sites (99.2% compared
+to 97.4%), and 2.3% with 900 sites (98.8% compared
+to 96.5%). §6.2 provides a unifying explanation for the
+increasing accuracy gap phenomenon in both low-data
+and high-data scenarios.
+5.2.4 Open-world performance
+We now evaluate Var-CNN and DF in the open-world
+setting. Here, both the number of monitored traces per
+monitored site and the number of unmonitored train-
+ing sites aﬀect TPR and FPR. Generally, more moni-
+tored traces leads to a better knowledge of the moni-
+tored class and a higher TPR, while more unmonitored
+training sites biases the attack model towards correctly
+separating monitored from unmonitored, reducing FPR.
+Of course, these trends are not exact, as strictly increas-
+ing the number of unmonitored training sites also intro-
+duces noise in monitored classiﬁcation, slightly reducing
+TPR.
+We assume that the adversary can collect enough
+of both types of traces to balance out possible negating
+eﬀects. Speciﬁcally, we quantify the attacker’s data col-
+lection capabilities by using a varying number of mon-
+itored traces and unmonitored training sites in a 1:100
+ratio. We now study how Var-CNN and DF perform
+under an adversary with varying data collection capa-
+bilities. For all our experiments, we picked conﬁdence
+thresholds such that both attacks had a good balance of
+TPR and FPR and used these across all data settings.
+In large open-worlds where the attacker must sep-
+arate perhaps billions of unmonitored sites from moni-
+tored, false positives are often the limiting factor [34].
+Forexample,withamillionunmonitoredtraces,anFPR
+of even 0.1% results in 1,000 false positives. Observe in
+Figures 10a, 10b, and 10c that for both Var-CNN and
+DF,Two-TPRincreases,Multi-TPRincreases,andFPR
+decreases as the adversary’s data collection capabilities
+increase. Assuming the probability of an unmonitored
+site falsely classiﬁed as a monitored site stays the same
+for an arbitrarily sized open-world, an adversary can
+thus reduce false positives and increase true positives
+by scaling the amount of training data. Furthermore,
+Var-CNN performs better than DF in these high-data
+settings (i.e., settings with a large number of traces per
+trial), with over 4×lower FPR (1.47% to 0.36%), over1% better Two-TPR (96.45% to 98.07%), and over 1%
+better Multi-TPR (96.39% to 98.01%).
+While Var-CNN outperforms DF in high-data set-
+tings, its accuracy improvements are especially use-
+ful as the amount of training data decreases. In Fig-
+ures 10a, 10b, and 10c, we observe that the gap between
+Var-CNN and DF generally tends to increase as the
+amount of data decreases. For instance, the Multi-TPR
+gap is 2.22% with 1000 traces, 7.13% with 80 traces,
+and 13% with 60 traces. At these same scales, the FPR
+gap is 1.11%, 2.21%, and 3.12%, respectively, and the
+Two-TPRgapis2.13%,6.62%,and11.34%,respectively.
+This indicates that an attacker with fewer capabilities
+for collecting large amounts of training data has a better
+probabilityofbothﬁngerprintingauserwhilenotfalsely
+identifying them with Var-CNN. §6.2 relates this phe-
+nomenon to those observed in the closed-world setting
+and provides a possible unifying explanation.
+5.2.5 Comparison against other attacks in the
+presence of WF defenses
+While DF outperformed prior art on Sirinam et al.’s
+dataset [38], these attacks have never been simultane-
+ously tested on the Rimmer dataset [36]. In this experi-
+ment, we evaluate Var-CNN and DF against prior art in
+settings with and without WF defenses. Note that here
+we exclude k-NN [43] from our evaluation since it has
+been shown by several researchers to be less accurate
+than bothk-FP and CUMUL [16, 34, 36, 38].
+First, we assess our original assumption that DF is
+the current state-of-the-art WF attack. The ﬁrst row in
+Table 1 shows Multi-TPR and FPR for all attacks in a
+medium-sizedopen-worldwithnoWFdefense.SinceDF
+has a higher Multi-TPR and lower FPR than all prior
+art, it is still the current state-of-the-art attack, even on
+the Rimmer dataset [36]. As noted by Sirinam et al. [38],
+it also performs comparably or slightly better than all
+prior art in WF defenses settings against Tamaraw and
+WTF-PAD.
+Having shown DF to be the best prior-art attack in
+settings with and without WF defenses, we now assess
+Var-CNN’s performance relative to DF. In the unde-
+fended scenario, Var-CNN (with a conﬁdence threshold
+of 0.5) attains similar Multi-TPR to DF (with a conﬁ-
+dence threshold of 0.7), 89.2% compared to 88.4%. How-
+ever, it has a nearly 8×lower FPR, going from 8.6%
+to 1.1%. Thus, compared to Var-CNN, DF would in-
+correctly classify several more unmonitored websites as
+being monitored, thereby falsely identifying users.
+
+Var-CNN 304
+Table 1. Open-world Multi-TPR and FPR for Var-CNN evaluated against three other state-of-the-art attacks. Evaluations are done
+in both natural settings (None) and WF defense settings against a constant-ﬂow WF defense (Tamaraw) and a WF defense based on
+adaptive padding (WTF-PAD). We use 100 monitored sites, 100 monitored traces, 90000 unmonitored training sites, and 10000 un-
+monitored testing sites for this evaluation and simulate the attacks and defenses with the original code from each author. Note that
+Var-CNN gets higher Multi-TPR and lower FPR than any other attack, even in settings with WF defenses. Furthermore, note that
+Multi-TPR and FPR for Tamaraw is zero across nearly all attacks since the strong defense causes all attacks to classify every trace as
+unmonitored. The only exception is with k-FP, which we further explain in §5.2.5.
+Defenses Overhead Var-CNN DF [38] k-FP [16] CUMUL [34]
+Bandwidth Latency Multi-TPR FPR Multi-TPR FPR Multi-TPR FPR Multi-TPR FPR
+None 0% 0% 89.2% 1.1% 88.4% 8.6% 70.4% 9.1% 85.6% 10.2%
+Tamaraw [5] 63% 51% 0.0% 0.0% 0.0% 0.0% 4.1% 54.3% 0.0% 0.0%
+WTF-PAD [25] 27% 0% 88.8% 0.7% 86.2% 5.4% 71.1% 9.5% 78.1% 12.6%
+In the WF defense setting against Tamaraw and
+WTF-PAD, Var-CNN still retains signiﬁcant improve-
+ments over DF and the rest of the prior-art. For exam-
+ple, with a Multi-TPR comparable to that of DF (88.8%
+compared to 86.2%, respectively), Var-CNN achieves a
+nearly 8×reduction in FPR from 5.4% to 0.7%. Against
+other attacks such as k-FP and CUMUL, Var-CNN
+has even greater improvements in both Multi-TPR and
+FPR.
+Finally, we note that after trying several conﬁgu-
+rations of Tamaraw, we were unable to get a conﬁgu-
+ration that yielded non-zero Multi-TPR and FPR for
+all attacks. While k-FP did manage to get a 4% Multi-
+TPR against Tamaraw, the resulting FPR of 54.3% is
+too high to make reliable predictions. Indeed, it appears
+that our Tamaraw conﬁgurations were so strong that
+they caused most attacks to classify every instance as
+being unmonitored, resulting in 0% TPR and 0% FPR.
+Incontrast,WTF-PAD(atleastundertheconﬁguration
+wetested)sacriﬁcestoomuchsecurityforlowoverheads.
+As noted by Sirinam et al. [38], it fails to protect against
+attacks like Var-CNN and DF, which achieve relatively
+high TPR and relatively low FPR.
+6 Discussion
+Inthissection,wediscusspertinentaspectsofVar-CNN.
+6.1 A note on runtimes
+Note that with some experimental settings, both DF
+and Var-CNN could possibly achieve better accuracies
+if allowed to train for longer. However, this adds yet
+another parameter the attacker must optimize for and
+introducesadditionaltrainingtimeoverheads.Wethere-fore made a simplifying assumption here to use the same
+stopping scheme for each model across all experiments
+(see Appendix A for more details).
+One of the weaknesses of Var-CNN is that it takes
+a longer time on average to train than DF due to the
+morecomplexunderlyingmodel(ResNet-18),additional
+fully-connected layer for basic cumulative features, and
+time model. For example, for a closed-world with 100
+monitored sites and 100 traces per site, it took approx-
+imately 25 minutes to train Var-CNN using one GPU
+while it took around 4 minutes to train DF. These run-
+times scale roughly proportionally with the amount of
+training data used.
+While Var-CNN does cause increased runtimes, we
+believe they are oﬀset by its much improved perfor-
+mance in all settings tested. For example, for DF to
+reach a comparable accuracy to Var-CNN in a closed-
+world with 100 sites and 100 traces, it would need ap-
+proximately 5×thenumberoftraces(§5.2.3). Moreover,
+we can parallelize the training procedure to decrease
+runtimes. Since Var-CNN direction and Var-CNN time
+are independent models ensembled after training, they
+can be trained separately on two GPUs. In addition, re-
+cent work in Deep Learning research has shown that
+models can be massively parallelized by using larger
+batch sizes, special learning rate schemes, and more
+GPUs. A prime example of this is Goyal et al. [14], who
+trained a ResNet-50 on a very large image classiﬁcation
+dataset in just one hour. Previously, it would have taken
+several days to train on a single GPU.
+6.2 Why does Var-CNN work in low-data
+settings?
+As noted in §5.2.3 and §5.2.4, Var-CNN’s accuracy im-
+provements over DF increase in the following scenarios:
+
+Var-CNN 305
+1. A ﬁxed number of monitored sites and a decreasing
+number of monitored traces in the closed-world.
+2. A ﬁxed number of monitored traces and an increas-
+ing number of monitored sites in the closed-world.
+3. A decreasing number of monitored traces and un-
+monitored training sites in the open-world.
+Inthissection,weprovideapossiblegeneralexplanation
+for these trends and relate them to the model techniques
+used in Var-CNN.
+For the following discussion, consider neural net-
+work optimization as ﬁnding a good hypothesis (i.e.,
+one that achieves low training and generalization errors)
+among the overall hypothesis space. All of the above
+settings make the hypothesis space more vast and am-
+biguous to traverse. For instance, decreasing the num-
+ber of monitored traces and unmonitored train sites
+(i.e., reducing the training data available to the clas-
+siﬁer) provides less information for the optimizer to ﬁnd
+a good hypothesis with low generalization error. On the
+other hand, increasing the number of monitored sites as
+in the second scenario expands the overall size of the
+hypothesis space with no additional optimization help
+from more monitored traces. As the hypothesis space
+changes, a modern convolutional neural network with
+enoughweightparameterswouldstilllikelyachievegood
+training accuracy, as shown by Zhang et al. [48]. How-
+ever, as the optimization landscape is more vast and
+ambiguous to traverse, it would have an increasingly dif-
+ﬁcult time ﬁnding hypotheses that don’t overﬁt to the
+training data (i.e., that have low generalization error).
+In contrast, one of the key beneﬁts of ensembles, as
+noted by seminal work [10], is statistical. When the hy-
+pothesis space becomes unclear as with the above sce-
+narios, ensembles help ﬁlter out bad hypotheses that
+overﬁt to the training data, making the overall model
+have better generalization capabilities. Given that Var-
+CNN is composed of two types of ensembles, one with
+an in-training combination of a dilated causal ResNet-
+18 and cumulative features and the other with a post-
+training ensemble of direction and timing models, we
+suspect that these ensembles enable Var-CNN to per-
+form especially well when the optimization landscape
+gets more complex to navigate. Empirically, this was
+also observed in §5.2.1, where the gap between the en-
+semble model and the best performing constituent in-
+creases as the number of monitored traces decreases.7 Future work
+Although Var-CNN outperforms prior WF attacks in
+every setting tested, especially with small amounts of
+training data, there are still many directions where it
+could improve. In this section, we discuss limitations of
+our work and possible avenues for future work.
+More powerful baseline models. Since deep
+learning is a rapidly accelerating ﬁeld [28], applications
+of new model architecture breakthroughs could lead to
+better results. For instance, here, we used the ResNet
+architecture as our baseline CNN since it is currently
+the most widely used state-of-the-art Image Classiﬁca-
+tion CNN. There are other Image Classiﬁcation models
+suchaslargervariantsofResNetsorDenseNets[21]that
+could give better results. In our preliminary tests with
+these architectures, however, we did not see signiﬁcant-
+enoughaccuracyimprovementstojustifytheirincreased
+computational costs.
+In addition, recent work on Synthetic Gradients [23]
+could lead to RNNs with the ability to train on much
+longer inputs (e.g., the packet sequences used in this
+work). Since RNNs were speciﬁcally made for tempo-
+ral sequences, this model might understand long-term
+packet interactions better than dilated causal convolu-
+tions.
+Regardless of the architecture choice, we would like
+to note that nearly all of the packet sequence classi-
+ﬁcation insights used in this paper are architecture-
+independent and can thus be applied to most future
+deep learning attacks. For instance, dilated causal con-
+volutions work with any CNN architecture and ensem-
+bleswithcumulativefeaturesandtimingdataworkwith
+nearly all neural network models.
+Data augmentation. A common technique in
+Computer Vision research is to artiﬁcially expand
+the training data size by using data augmentation—
+cropping, rotating, ﬂipping, shifting, and rescaling the
+image. This technique works in Computer Vision be-
+cause the artiﬁcial data is often similar-enough to real-
+world data that it is useful to the model. Similar tech-
+niques for packet sequences, such as shifting them a ran-
+dom number of packets one way or the other, could be
+used to achieve even better low-data performance.
+User-sourced datasets. As described in §2.2,
+there are two main types of assumptions, replicability
+and applicability. Both of these assumptions could be
+testedinareal-worldusertrialstudy.Here,anadversary
+would draft a number of real-world Tor users and moni-
+tor their packet sequences, sites visited (including back-
+
+Var-CNN 306
+groundtraﬃc),andmetadatasettings(Torversions,cir-
+cuit latencies, etc.). This would enable them to know
+how strong the WF assumptions are in the real-world.
+Adversarial machine learning. Regular WF de-
+fenses such as recent work by Lu et al. [31] and Wang et
+al. [46] degrade accuracy by blocking information leak-
+age from sources such as inter-packet timing, packet se-
+quence length, and burst patterns. However, more pre-
+ciseWFdefensescouldexistwithinthecontextofadver-
+sarial attacks on machine learning models [13]. Assum-
+ing the WF defender has some knowledge of the WF
+attacker model, she might be able to craft specialized
+perturbations to reduce the model’s classiﬁcation abil-
+itywhileintroducinglessoverheadthanmoretraditional
+WF defenses.
+One challenging problem here is deﬁning a useful
+constraint for adversarial attacks. Most work in adver-
+sarial machine learning has focused on image classiﬁca-
+tion,where /lscriptpnormsconstrainthetotalamountofpixel-
+level perturbation allowed for an image. With packet se-
+quences, however, it is much harder to change individual
+inputs as they must obey temporal orderings. For exam-
+ple, an outgoing packet cannot be changed to incoming
+if that information is necessary in the future. The same
+argumentappliestochangingthetimestampofapacket.
+Thus, creating a specialized constraint for the set of all
+allowable perturbations will most likely be the focus of
+future work.
+Finally, as with all attack-defense paradigms, while
+adversarial machine learning WF defenses might be able
+to initially defeat WF attacks, new WF attacks could
+be trained to become robust against these defenses. For
+instance, recent work by Mądry et al. has shown that by
+viewing adversarial machine learning within the context
+of convex optimization, one can train a model that is
+robust to adversarial input [33]. This would allow for
+a WF attack to be resistant to adversarial WF defense
+perturbations.
+Code release. To support future work, we have
+made our code, including our re-implementation of DF,
+publicly available at https://github.com/sanjit-bhat/
+Var-CNN. Please refer to Rimmer et al.’s paper [36] for
+instructions on downloading their dataset.
+8 Conclusion
+In this work, we present Var-CNN, a novel website
+ﬁngerprinting attack that combines a strong baseline
+ResNet CNN model with several powerful insights forpacket sequence classiﬁcation: dilated causal convolu-
+tions, automatically extracted direction and timing fea-
+tures, and manually extracted cumulative features. In
+open-world settings with large amounts of data, Var-
+CNN achieves over 1% better TPR and 4×lower FPR
+than prior-art. In addition, Var-CNN’s improvements
+are especially relevant in low-data scenarios, where deep
+learning models typically suﬀer. Here, it reduces prior-
+art FPR by 3.12% while increasing TPR by 13%.
+Overall, Var-CNN’s model insights, which can be
+applied to most future neural network models, allow it
+to need less training data than prior art. This lowers
+the likelihood of data staleness performance issues and
+allows a weaker attacker with fewer data collection re-
+sources to successfully perform a powerful WF attack.
+9 Acknowledgements
+This work was done as part of the MIT PRIMES pro-
+gram while Sanjit Bhat and David Lu were students at
+Acton-Boxborough Regional High School. The authors
+were partially supported by National Science Founda-
+tion grant No. 1813087. The authors would like to thank
+Dimitris Tsipras and the Mądry Lab at MIT for provid-
+ing some of the compute resources used to run these
+experiments.
+References
+[1] The Top 500 Sites on the Web. https://www.alexa.com/
+topsites, 2017.
+[2] Martín Abadi, Ashish Agarwal, Paul Barham, Eugene
+Brevdo, Zhifeng Chen, Craig Citro, Gregory S. Corrado,
+Andy Davis, Jeﬀrey Dean, Matthieu Devin, Sanjay Ghe-
+mawat, Ian J. Goodfellow, Andrew Harp, Geoﬀrey Irving,
+Michael Isard, Yangqing Jia, Rafal Józefowicz, Lukasz
+Kaiser, Manjunath Kudlur, Josh Levenberg, Dan Mané,
+Rajat Monga, Sherry Moore, Derek Gordon Murray, Chris
+Olah, Mike Schuster, Jonathon Shlens, Benoit Steiner, Ilya
+Sutskever, Kunal Talwar, Paul A. Tucker, Vincent Van-
+houcke, Vijay Vasudevan, Fernanda B. Viégas, Oriol Vinyals,
+Pete Warden, Martin Wattenberg, Martin Wicke, Yuan
+Yu, and Xiaoqiang Zheng. TensorFlow: Large-Scale Ma-
+chine Learning on Heterogeneous Systems. arXiv preprint
+arXiv:1603.04467 , 2015.
+[3] Kota Abe and Shigeki Goto. Fingerprinting Attack on Tor
+Anonymity using Deep Learning. In Proceedings of the Asia-
+Paciﬁc Advanced Network Research Workshop , volume 42,
+pages 15–20, 2016.
+
+Var-CNN 307
+[4] George D. Bissias, Marc Liberatore, David Jensen, and
+Brian N. Levine. Privacy Vulnerabilities in Encrypted HTTP
+Streams. Privacy Enhancing Technologies , pages 1–11, 2006.
+[5] Xiang Cai, Rishab Nithyanand, Tao Wang, Rob Johnson,
+and Ian Goldberg. A Systematic Approach to Developing
+and Evaluating Website Fingerprinting Defenses. In Proceed-
+ings of the ACM Conference on Computer and Communica-
+tions Security , pages 227–238, 2014.
+[6] Xiang Cai, Xin C. Zhang, Brijesh Joshi, and Rob Johnson.
+Touching from a Distance: Website Fingerprinting Attacks
+and Defenses. In Proceedings of the ACM Conference on
+Computer and Communications Security , pages 605–616,
+2012.
+[7] Heyning Cheng and Ron Avnur. Traﬃc Analysis of SSL
+Encrypted Web Browsing. https://pdfs.semanticscholar.org/
+1a98/7c4fe65fa347a863dece665955ee7e01791b.pdf, 1998.
+[8] François Chollet et al. Keras. https://keras.io, 2015.
+[9] Tor Developers. Tor metrics portal.
+https://metrics.torproject.org, 2018.
+[10] Thomas G. Dietterich. Ensemble Methods in Machine Learn-
+ing. InProceedings of the International Workshop on Multi-
+ple Classiﬁer Systems , 2000.
+[11] Roger Dingledine, Nick Mathewson, and Paul Syverson. Tor:
+The Second-Generation Onion Router. In Proceedings of the
+13th USENIX Security Symposium , pages 303–320, 2004.
+[12] Kevin P. Dyer, Scott E. Coull, Thomas Ristenpart, and
+Thomas Shrimpton. Peek-a-Boo, I Still See You: Why Ef-
+ﬁcient Traﬃc Analysis Countermeasures Fail. In Proceedings
+of the IEEE Symposium on Security and Privacy , pages 332–
+346, 2012.
+[13] Ian J. Goodfellow, Jonathon Shlens, and Christian Szegedy.
+Explaining and Harnessing Adversarial Examples. In Proceed-
+ings of the International Conference on Learning Representa-
+tions, 2015.
+[14] Priya Goyal, Piotr Dollár, Ross Girshick, Pieter Noord-
+huis, Lukasz Wesolowski, Aapo Kyrola, Andrew Tulloch,
+Yangqing Jia, and Kaiming He. Accurate, Large Mini-
+batch SGD: Training ImageNet in 1 Hour. arXiv preprint
+arXiv:1706.02677 , 2017.
+[15] Ankit Gupta and Alexander M. Rush. Dilated Convolutions
+for Modeling Long-Distance Genomic Dependencies. In Pro-
+ceedings of the 34th International Conference on Machine
+Learning, Workshop on Computational Biology , 2017.
+[16] Jamie Hayes and George Danezis. k-ﬁngerprinting: A Robust
+Scalable Website Fingerprinting Technique. In Proceedings
+of the 25th USENIX Security Symposium , pages 1187–1203,
+2016.
+[17] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
+Deep Residual Learning for Image Recognition. arXiv
+preprint arXiv:1512.03385 , 2015.
+[18] Dominik Herrmann, Rolf Wendolsky, and Hannes Feder-
+rath. Website Fingerprinting: Attacking Popular Privacy
+Enhancing Technologies with the Multinomial Naïve-Bayes
+Classiﬁer. In Proceedings of the ACM Workshop on Cloud
+Computing Security , pages 31–42, 2009.
+[19] Andrew Hintz. Fingerprinting Websites Using Traﬃc Analy-
+sis.Privacy Enhancing Technologies , pages 171–178, 2003.
+[20] Sepp Hochreiter and Jürgen Schmidhuber. Long Short-Term
+Memory. Neural Computation , 9(8):1735–1780, 1997.[21] Gao Huang, Zhuang Liu, Laurens van der Maaten, and Kil-
+ian Q. Weinberger. Densely connected convolutional net-
+works. In Proceedings of the IEEE Conference on Computer
+Vision and Pattern Recognition , 2017.
+[22] Sergey Ioﬀe and Christian Szegedy. Batch Normalization:
+Accelerating Deep Network Training by Reducing Internal
+Covariate Shift. In Proceedings of the 32nd International
+Conference on Machine Learning , 2015.
+[23] Max Jaderberg, Wojciech M. Czarnecki, Simon Osin-
+dero, Oriol Vinyals, Alex Graves, David Silver, and Koray
+Kavukcuoglu. Decoupled Neural Interfaces using Synthetic
+Gradients. In Proceedings of the 34th International Confer-
+ence on Machine Learning , 2017.
+[24] Marc Juarez, Sadia Afroz, Gunes Acar, Claudia Diaz, and
+Rachel Greenstadt. A Critical Evaluation of Website Finger-
+printing Attacks. In Proceedings of the ACM Conference on
+Computer and Communications Security , 2014.
+[25] Marc Juarez, Mohsen Imani, Mike Perry, Claudia Diaz, and
+Matthew Wright. Toward an Eﬃcient Website Fingerprinting
+Defense. In Proceedings of the European Symposium on
+Research in Computer Security , pages 27–46, 2016.
+[26] Diederik P. Kingma and Jimmy Ba. Adam: A Method for
+Stochastic Optimization. In Proceedings of the 3rd Interna-
+tional Conference on Learning Representations , 2015.
+[27] Alex Krizhevsky, Ilya Sutskever, and Geoﬀrey E. Hinton.
+ImageNet Classiﬁcation with Deep Convolutional Neural
+Networks. In Proceedings of the Conference on Neural Infor-
+mation Processing Systems , pages 1097–1105, 2012.
+[28] Yann LeCun, Yoshua Bengio, and Geoﬀrey E. Hinton. Deep
+Learning. Nature, 521:436–444, 2015.
+[29] Yann LeCun, Leon Bottou, Yoshua Bengio, and Patrick
+Haﬀner. Gradient-Based Learning Applied to Document
+Recognition. Proceedings of the IEEE , 86(11):2278–2324,
+1998.
+[30] Marc Liberatore and Brian N. Levine. Inferring the Source
+of Encrypted HTTP Connections. In Proceedings of the
+13th ACM Conference on Computer and Communications
+Security, pages 255–263, 2006.
+[31] David Lu, Sanjit Bhat, Albert Kwon, and Srinivas Devadas.
+DynaFlow: An Eﬃcient Website Fingerprinting Defense
+Based on Dynamically-Adjusting Flows. In Proceedings of
+the ACM Workshop on Privacy in the Electronic Society ,
+2018.
+[32] Liming Lu, Ee-Chien Chang, and Mun C. Chan. Website
+Fingerprinting and Identiﬁcation Using Ordered Feature Se-
+quences. In Proceedings of the European Symposium on
+Research in Computer Security , pages 199–214, 2010.
+[33] Aleksander Mądry, Aleksandar Makelov, Ludwig Schmidt,
+Dimitris Tsipras, and Adrian Vladu. Towards Deep Learning
+Models Resistant to Adversarial Attacks. In Proceedings of
+the International Conference on Learning Representations ,
+2018.
+[34] Andriy Panchenko, Fabian Lanze, Aandreas Zinnen, and
+Martin Henze. Website Fingerprinting at Internet Scale. In
+Proceedings of the 16th Network and Distributed System
+Security Symposium , 2016.
+[35] Andriy Panchenko, Lukas Niessen, Andreas Zinnen, and
+Thomas Engel. Website Fingerprinting in Onion Routing
+Based Anonymization Networks. In Proceedings of the ACM
+
+308
+Workshop on Privacy in the Electronic Society , pages 103–
+114, 2011.
+[36] Vera Rimmer, Davy Preuveneers, Marc Juarez, Tom V.
+Goethem, and Wouter Joosen. Automated Feature Extrac-
+tion for Website Fingerprinting through Deep Learning. In
+Proceedings of the Network and Distributed System Security
+Symposium , 2018.
+[37] Karen Simonyan and Andrew Zisserman. Very Deep Convo-
+lutional Networks for Large-Scale Image Recognition. arXiv
+preprint arXiv:1409.1556 , 2014.
+[38] Payap Sirinam, Mohsen Imani, Marc Juarez, and Matthew
+Wright. Deep Fingerprinting: Undermining Website Fin-
+gerprinting Defenses with Deep Learning. In Proceedings
+of the ACM Conference on Computer and Communications
+Security, 2018.
+[39] Nitish Srivastava, Geoﬀrey H. Hinton, Alex Krizhevsky, Ilya
+Sutskever, and Ruslan Salakhutdinov. Dropout: A Simple
+Way to Prevent Neural Networks from Overﬁtting. Journal
+of Machine Learning Research , 15:1929–1958, 2014.
+[40] Qixiang Sun, Daniel R. Simon, Yi-Min Wang, Wilf Russell,
+Venkata N. Padmanabhan, and Lili Qiu. Statistical Identiﬁ-
+cation of Encrypted Web Browsing Traﬃc. In Proceedings of
+the IEEE Symposium on Security and Privacy , pages 19–30,
+2002.
+[41] Christian Szegedy, Sergey Ioﬀe, Vincent Vanhoucke, and
+Alex Alemi. Inception-v4, Inception-ResNet and the Im-
+pact of Residual Connections on Learning. arXiv preprint
+arXiv:1602.07261 , 2016.
+[42] Aaron van den Oord, Sander Dieleman, Heiga Zen, Karen
+Simonyan, Oriol Vinyals, Alex Graves, Nal Kalchbrenner,
+Andrew Senior, and Koray Kavukcuoglu. WaveNet: A Gener-
+ative Model for Raw Audio. arXiv preprint arXiv:1609.03499 ,
+2016.
+[43] Tao Wang, Xiang Cai, Rob Johnson, and Ian Goldberg.
+Eﬀective Attacks and Provable Defenses for Website Fin-
+gerprinting. In Proceedings of the 23rd USENIX Security
+Symposium , pages 143–157, 2014.
+[44] Tao Wang and Ian Goldberg. Improved Website Finger-
+printing on Tor. In Proceedings of the ACM Workshop on
+Privacy in the Electronic Society , 2013.
+[45] Tao Wang and Ian Goldberg. On Realistically Attacking
+Tor with Website Fingerprinting. In Proceedings on Privacy
+Enhancing Technologies , pages 21–36, 2016.
+[46] Tao Wang and Ian Goldberg. Walkie-Talkie: An Eﬃcient
+Defense Against Passive Website Fingerprinting Attacks.
+InProceedings of the USENIX Security Symposium , pages
+1375–1390, 2017.
+[47] Fisher Yu and Vladlen Koltun. Multi-Scale Context Ag-
+gregation By Dilated Convolutions. In Proceedings of the
+International Conference on Learning Representations , 2016.
+[48] Chiyuan Zhang, Samy Bengio, Moritz Hardt, Benjamin
+Recht, and Oriol Vinyals. Understanding Deep Learning
+Requires Rethinking Generalization. In Proceedings of the
+International Conference on Learning Representations , 2017.Appendices
+A Var-CNN model design
+To come up with the ﬁnal Var-CNN model, we per-
+formed several diﬀerent experiments testing various as-
+pects of the model design. Here, we mention a few im-
+portant results. For full parameter choices, please refer
+to our code.
+A.1 Ensemble schemes
+One of our main problems was deciding how to most
+eﬀectively combine the direction, time, and metadata
+models. First, note that each model yielded varying
+standalone performance. For instance, in a closed-world
+with 100 sites and 90 monitored traces, both the di-
+rection and time models achieved above 90% accuracy
+while the metadata model consistently got 35% accu-
+racy. If we just averaged all three models post-training,
+this caused an accuracy decrease since the metadata
+model was signiﬁcantly worse than the other two. This
+ﬁnding led us to use metadata during training rather
+than after. In our tests, we noticed that adding meta-
+data to both the direction and time ResNets acted as
+a stabilizer, reducing stochasticity and improving ﬁnal
+accuracy. Intuitively, the overall model learned when to
+usetheautomaticallyextractedResNetfeaturesoverthe
+manually extracted cumulative features, and vice-versa,
+balancing each source of information.
+Now that we knew to combine the ResNet with the
+cumulative features in-training, one remaining question
+was how to combine the direction and timing informa-
+tion. In early experiments, we tried to use in-training
+weight-sharing techniques. While this certainly did not
+double the number of model parameters, it resulted in
+an accuracy drop compared to the individual direction
+and timing models. This was likely due to the dissim-
+ilarity between direction and timing inputs (e.g., on a
+meta-level, the former is sampled from a discrete distri-
+bution while the latter from a continuous distribution).
+As a result, features learned from direction inputs were
+markedly diﬀerent from those learned from timing in-
+puts, and the shared model struggled to ﬁnd a set of
+shared weights.
+Unfortunately, the alternative to weight sharing—
+an in-training combination of two separate direction
+and timing models—often led to reduced accuracy as
+the fundamental optimization problem got much harder
+
+309
+with twice the number of parameters. Instead, we en-
+sembled these models post-training by combining their
+softmax outputs. In our experiments, we compared var-
+ious schemes for combining, such as using the validation
+set to ﬁnd a weighted average and doing simple averag-
+ing, against a simple sweep to ﬁnd the optimal weight.
+Inmostcases,ourresultsindicatedthattheﬁrstmethod
+was overﬁtting the validation set, whereas a simple aver-
+age usually achieved near-optimal accuracy. Therefore,
+for the ﬁnal Var-CNN model we performed a simple av-
+erage over the softmax outputs of the direction and time
+models trained jointly with metadata, as shown in Fig-
+ure 5.
+A.2 Learning rate decay and early stopping
+Ratherthanhavingaﬁxedlearningratedrop-oﬀscheme
+with a ﬁxed number of epochs, we found it much more
+eﬀective to decide these based on validation set perfor-
+mance. Speciﬁcally, we started training with a learn-
+ing rate of 0.001, the default value for the Adam op-
+timizer [26], and allowed the network to train for 5
+epochs without improving validation accuracy before we
+reduced learning rate by a factor of√
+0.1(i.e.,new_lr=√
+0.1∗old_lr). The minimum possible learning rate was
+0.00001, and we stopped training after not improving
+validationaccuracyfor10epochs,twicethenumberused
+for learning rate decay. We saved the best performing
+model on the validation set and reloaded this model to
+perform ﬁnal classiﬁcation on the test set.
+Twoparametersweexperimentedwithherewerethe
+initial learning rate andthe basepatience usedfor learn-
+ing rate decay. From our experiments, reducing learning
+rate from the default resulted in higher local minima in
+the loss landscape, while increasing learning rate did not
+improve model accuracy. Increasing base patience some-
+times allowed for slightly better accuracy, but it also
+signiﬁcantly increased the average number of epochs for
+training. With a base patience of 5, both the direction
+and time models used between 30–50 epochs across all
+experimental settings.
+A.3 Dropout and /lscript2decay
+With both the direction and time models, training accu-
+racy reached around 99.99% by the end of training, in-
+dicating that the model may have overﬁt to the training
+data. To curb this, we tried various mechanisms, such
+as introducing Dropout [39] and /lscript2decay to the ResNetmodel and the ﬁnal fully-connected layer after concate-
+nating the ResNet and metadata models. We observed
+that/lscript2decay did not manage to reduce overﬁtting on
+the ResNet. However, using a Dropout rate of 0.5 on
+the ﬁnal fully-connected layer did reduce overﬁtting to
+some extent, decreasing the generalization error.
+
+310
+102
+103
+Monitored Traces
+70
+75
+80
+85
+90
+95Two-TPR
+DF
+Var-CNN
+(a)
+102
+103
+Monitored Traces
+70
+75
+80
+85
+90
+95Multi-TPR
+DF
+Var-CNN
+(b)
+104
+105
+Unmonitored Training Sites
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0FPR
+DF
+Var-CNN
+(c)
+Fig. 10.Var-CNN and DF’s (a) Two-TPR, (b) Multi-TPR, and
+(c) FPR as a function of the attacker’s data collection capabili-
+ties. Here, we use 100 monitored sites and 100,000 unmonitored
+testing sites. For each setting, we use monitored traces and un-
+monitored training sites in a 1:100 ratio. We choose a conﬁdence
+threshold of 0.5 for Var-CNN and 0.8 for DF. Results are in %
+and the x-axis is logarithmically scaled.
+

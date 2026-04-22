@@ -124,11 +124,13 @@ def main(config):
                   'num_unmon_sites': num_unmon_sites}
 
     # Performs simple average to get ensemble predictions
-    for softmax in predictions.values():
-        ensemble_softmax += softmax
-    ensemble_softmax /= len(predictions)
-    if len(predictions) > 1:
-        predictions['ensemble'] = ensemble_softmax
+    if predictions and ensemble_softmax is not None:
+        for softmax in predictions.values():
+            ensemble_softmax += softmax
+        assert ensemble_softmax is not None
+        ensemble_softmax = ensemble_softmax / len(predictions)
+        if len(predictions) > 1:
+            predictions['ensemble'] = ensemble_softmax
 
     results = {}
     if num_unmon_sites == 0:  # Closed-world

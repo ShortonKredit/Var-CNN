@@ -62,9 +62,9 @@ def generate(config, data_type, mixture_num):
     with h5py.File('%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
                                          num_unmon_sites_train,
                                          num_unmon_sites_test), 'r') as f:
-        dir_seq = f[data_type + '/dir_seq'][:]
-        time_seq = f[data_type + '/time_seq'][:]
-        metadata = f[data_type + '/metadata'][:]
+        dir_seq = f[data_type + '/dir_seq'][:] if use_dir else None
+        time_seq = f[data_type + '/time_seq'][:] if use_time else None
+        metadata = f[data_type + '/metadata'][:] if use_metadata else None
         labels = f[data_type + '/labels'][:]
 
     batch_start = 0

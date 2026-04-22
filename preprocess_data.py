@@ -10,7 +10,7 @@ import json
 import os
 from tqdm import tqdm
 import wang_to_varcnn
-from keras.utils.np_utils import to_categorical
+from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import StandardScaler
 
 
@@ -198,22 +198,119 @@ def main(config):
         f.create_group('training_data')
         f.create_group('validation_data')
         f.create_group('test_data')
-        for ds_name, arr in [['dir_seq', train_dir],
-                             ['time_seq', train_time],
-                             ['metadata', train_metadata],
-                             ['labels', train_labels]]:
+        for ds_name, arr in [('dir_seq', train_dir),
+                             ('time_seq', train_time),
+                             ('metadata', train_metadata),
+                             ('labels', train_labels)]:
             f.create_dataset('training_data/' + ds_name,
-                             data=arr[:int(0.95 * len(arr))])
-        for ds_name, arr in [['dir_seq', train_dir],
-                             ['time_seq', train_time],
-                             ['metadata', train_metadata],
-                             ['labels', train_labels]]:
+                             data=arr[:int(0.95 * len(arr))])  # type: ignore
+        for ds_name, arr in [('dir_seq', train_dir),
+                             ('time_seq', train_time),
+                             ('metadata', train_metadata),
+                             ('labels', train_labels)]:
             f.create_dataset('validation_data/' + ds_name,
-                             data=arr[int(0.95 * len(arr)):])
-        for ds_name, arr in [['dir_seq', test_dir],
-                             ['time_seq', test_time],
-                             ['metadata', test_metadata],
-                             ['labels', test_labels]]:
+                             data=arr[int(0.95 * len(arr)):])  # type: ignore
+        for ds_name, arr in [('dir_seq', test_dir),
+                             ('time_seq', test_time),
+                             ('metadata', test_metadata),
+                             ('labels', test_labels)]:
+            f.create_dataset('test_data/' + ds_name,
+                             data=arr)
+
+    end = time.time()
+    print('Finished %d_%d_%d_%d.h5 in %f seconds' %
+          (num_mon_sites, num_mon_inst, num_unmon_sites_train,
+           num_unmon_sites_test, end - start))
+
+
+if __name__ == '__main__':
+    with open('config.json') as config_file:
+        config = json.load(config_file)
+
+    main(config)
+    for dir_seq, time_seq, metadata, label in test_seq_and_labels:
+        test_dir.append(dir_seq)
+        test_time.append(time_seq)
+        test_metadata.append(metadata)
+        test_labels.append(label)
+
+    del train_seq_and_labels, test_seq_and_labels
+
+    train_dir = np.array(train_dir)
+    train_time = np.array(train_time)
+    train_metadata = np.array(train_metadata)
+
+    test_dir = np.array(test_dir)
+    test_time = np.array(test_time)
+    test_metadata = np.array(test_metadata)
+
+    # Converts from absolute times to inter-packet times.
+    # Each spot holds time diff between curr packet and prev packet
+    if inter_time:
+        inter_time_train = np.zeros_like(train_time)
+        inter_time_train[:, 1:] = train_time[:, 1:] - train_time[:, :-1]
+        train_time = inter_time_train
+
+        inter_time_test = np.zeros_like(test_time)
+        inter_time_test[:, 1:] = test_time[:, 1:] - test_time[:, :-1]
+        test_time = inter_time_test
+
+    # Reshape to add 3rd dim for CNN input
+    train_dir = np.reshape(train_dir,
+                           (train_dir.shape[0], train_dir.shape[1], 1))
+    test_dir = np.reshape(test_dir, (test_dir.shape[0], test_dir.shape[1], 1))
+
+    train_time = np.reshape(train_time,
+                            (train_time.shape[0], train_time.shape[1], 1))
+    test_time = np.reshape(test_time,
+                           (test_time.shape[0], test_time.shape[1], 1))
+
+    if scale_metadata:
+        metadata_scaler = StandardScaler()
+        train_metadata = metadata_scaler.fit_transform(train_metadata)
+        test_metadata = metadata_scaler.transform(test_metadata)
+
+    # One-hot encoding of labels, using one more class for
+    # unmonitored sites if in open-world
+    num_classes = num_mon_sites if num_unmon_sites == 0 else num_mon_sites + 1
+    train_labels = to_categorical(train_labels, num_classes=num_classes)
+    test_labels = to_categorical(test_labels, num_classes=num_classes)
+
+    print('training data stats:')
+    print(train_dir.shape)
+    print(train_time.shape)
+    print(train_metadata.shape)
+    print(train_labels.shape)
+
+    print('testing data stats:')
+    print(test_dir.shape)
+    print(test_time.shape)
+    print(test_metadata.shape)
+    print(test_labels.shape)
+
+    print('saving data')
+    with h5py.File('%s%d_%d_%d_%d.h5' %
+                   (data_dir, num_mon_sites, num_mon_inst,
+                    num_unmon_sites_train, num_unmon_sites_test), 'w') as f:
+        f.create_group('training_data')
+        f.create_group('validation_data')
+        f.create_group('test_data')
+        for ds_name, arr in [('dir_seq', train_dir),
+                             ('time_seq', train_time),
+                             ('metadata', train_metadata),
+                             ('labels', train_labels)]:
+            f.create_dataset('training_data/' + ds_name,
+                             data=arr[:int(0.95 * len(arr))])  # type: ignore
+        for ds_name, arr in [('dir_seq', train_dir),
+                             ('time_seq', train_time),
+                             ('metadata', train_metadata),
+                             ('labels', train_labels)]:
+            f.create_dataset('validation_data/' + ds_name,
+                             data=arr[int(0.95 * len(arr)):])  # type: ignore
+        for ds_name, arr in [('dir_seq', test_dir),
+                             ('time_seq', test_time),
+                             ('metadata', test_metadata),
+                             ('labels', test_labels)]:
             f.create_dataset('test_data/' + ds_name,
                              data=arr)
 

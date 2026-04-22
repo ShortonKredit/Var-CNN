@@ -2,16 +2,19 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
-from keras.models import Model
-from keras.layers.convolutional import Conv1D, MaxPooling1D
-from keras.layers import Dense, Activation, ZeroPadding1D, \
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint, Callback
+import os
+import shutil
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv1D, MaxPooling1D
+from tensorflow.keras.layers import Dense, Activation, ZeroPadding1D, \
     GlobalAveragePooling1D, Add, Concatenate, Dropout
-from keras.layers.normalization import BatchNormalization
-from keras.optimizers import Adam
-from keras import Input
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras import Input
 
 import numpy as np
+from typing import Callable, Optional
 
 parameters = {'kernel_initializer': 'he_normal'}
 
@@ -161,7 +164,7 @@ def basic_1d(filters, suffix, stage=0, block=0, kernel_size=3,
 
 # Code for standard ResNet model is based on
 # https://github.com/broadinstitute/keras-resnet
-def ResNet18(inputs, suffix, blocks=None, block=None, numerical_names=None):
+def ResNet18(inputs, suffix, blocks=None, block: Optional[Callable] = None, numerical_names=None):
     """Constructs a `keras.models.Model` object using the given block count.
 
     :param inputs: input tensor (e.g. an instance of `keras.layers.Input`)
@@ -190,13 +193,14 @@ def ResNet18(inputs, suffix, blocks=None, block=None, numerical_names=None):
     outputs = []
 
     for stage_id, iterations in enumerate(blocks):
-        x = block(features, suffix, stage_id, 0, dilations=(1, 2),
-                  numerical_name=False)(x)
+        block_fn1 = block(features, suffix, stage_id, 0, dilations=(1, 2),
+                          numerical_name=False)  # type: ignore
+        x = block_fn1(x)  # type: ignore
         for block_id in range(1, iterations):
-            x = block(features, suffix, stage_id, block_id, dilations=(4, 8),
-                      numerical_name=(
-                              block_id > 0 and numerical_names[stage_id]))(
-                x)
+            use_numerical_name = bool(block_id > 0 and numerical_names[stage_id])  # type: ignore
+            block_fn2 = block(features, suffix, stage_id, block_id, dilations=(4, 8),
+                              numerical_name=use_numerical_name)  # type: ignore
+            x = block_fn2(x)  # type: ignore
 
         features *= 2
         outputs.append(x)
@@ -205,11 +209,13 @@ def ResNet18(inputs, suffix, blocks=None, block=None, numerical_names=None):
     return x
 
 
-def get_model(config, mixture_num):
+def get_model(config, mixture_num, sub_model_name):
     """Returns Var-CNN model to run_model.py
 
     Args:
         config (dict): Deserialized JSON config file (see config.json)
+        mixture_num (int): Index of the mixture in the config
+        sub_model_name (str): Name of the current sub-model (e.g., 'dir_metadata')
     """
 
     num_mon_sites = config['num_mon_sites']
@@ -288,14 +294,27 @@ def get_model(config, mixture_num):
                   optimizer=Adam(0.001),
                   metrics=['accuracy'])
 
-    lr_reducer = ReduceLROnPlateau(monitor='val_acc', factor=np.sqrt(0.1),
+    weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+    
+    lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
                                    cooldown=0, patience=base_patience,
                                    min_lr=1e-5, verbose=1)
-    early_stopping = EarlyStopping(monitor='val_acc',
+    early_stopping = EarlyStopping(monitor='val_accuracy',
                                    patience=2 * base_patience)
-    model_checkpoint = ModelCheckpoint('model_weights.h5', monitor='val_acc',
+    model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
                                        save_best_only=True,
                                        save_weights_only=True, verbose=1)
 
-    callbacks = [lr_reducer, early_stopping, model_checkpoint]
+    class DriveBackupCallback(Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            src = weights_file
+            dst_dir = '/content/drive/MyDrive/Var-CNN-Colab2'
+            if os.path.exists(src) and os.path.exists(dst_dir):
+                try:
+                    shutil.copy(src, os.path.join(dst_dir, weights_file))
+                    print(f"\n[Colab Backup] Synced {weights_file} to Google Drive at epoch {epoch+1}")
+                except Exception:
+                    pass
+
+    callbacks = [lr_reducer, early_stopping, model_checkpoint, DriveBackupCallback()]
     return model, callbacks

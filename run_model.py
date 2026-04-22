@@ -8,9 +8,9 @@ import time
 import numpy as np
 
 import var_cnn
-import df
+# import df
 import evaluate
-import preprocess_data
+# import preprocess_data
 import data_generator
 
 
@@ -23,9 +23,9 @@ def update_config(config, updates):
 
 def is_valid_mixture(mixture):
     """Check if mixture is a 2D array with strings representing the models."""
-    assert type(mixture) == list and len(mixture) > 0
+    assert isinstance(mixture, list) and len(mixture) > 0
     for inner_comb in mixture:
-        assert type(inner_comb) == list and len(inner_comb) > 0
+        assert isinstance(inner_comb, list) and len(inner_comb) > 0
         for model in inner_comb:
             assert model in ['dir', 'time', 'metadata']
 
@@ -42,11 +42,19 @@ def train_and_val(config, model, callbacks, mixture_num, sub_model_name):
     val_steps = val_size // batch_size
 
     train_time_start = time.time()
-    model.fit_generator(
+    
+    weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+    
+    # RESUME TRAINING: Tự động load file weights đặc thù nếu có
+    if os.path.exists(weights_file):
+        print(f'---> Found existing weights file for {sub_model_name}, resuming training...')
+        model.load_weights(weights_file)
+
+    model.fit(
         data_generator.generate(config, 'training_data', mixture_num),
         steps_per_epoch=train_steps if train_size % batch_size == 0 else train_steps + 1,
         epochs=epochs,
-        verbose=2,
+        verbose=1,
         callbacks=callbacks,
         validation_data=data_generator.generate(
             config, 'validation_data', mixture_num),
@@ -63,13 +71,14 @@ def predict(config, model, mixture_num, sub_model_name):
           % (model_name, sub_model_name))
 
     if model_name == 'var-cnn':
-        model.load_weights('model_weights.h5')
+        weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+        model.load_weights(weights_file)
 
     test_size = num_mon_sites * num_mon_inst_test + num_unmon_sites_test
     test_steps = test_size // batch_size
 
     test_time_start = time.time()
-    predictions = model.predict_generator(
+    predictions = model.predict(
         data_generator.generate(config, 'test_data', mixture_num),
         steps=test_steps if test_size % batch_size == 0 else test_steps + 1,
         verbose=0)
@@ -109,11 +118,17 @@ if not os.path.exists('%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites,
                                             num_mon_inst,
                                             num_unmon_sites_train,
                                             num_unmon_sites_test)):
-    preprocess_data.main(config)
+    # preprocess_data.main(config)
+    print("[!] Warning: H5 data file not found. Please run prepare_openworld.py first.")
 
 for mixture_num, inner_comb in enumerate(mixture):
-    model, callbacks = var_cnn.get_model(config, mixture_num) \
-        if model_name == 'var-cnn' else df.get_model(config)
+    sub_model_name = '_'.join(inner_comb)
+    
+    if model_name == 'var-cnn':
+        model, callbacks = var_cnn.get_model(config, mixture_num, sub_model_name)
+    else:
+        # model, callbacks = df.get_model(config)
+        raise ValueError("Model 'df' requires df.py and its dependencies which are not imported.")
 
     sub_model_name = '_'.join(inner_comb)
     train_and_val(config, model, callbacks, mixture_num, sub_model_name)

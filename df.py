@@ -2,12 +2,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.models import Model
-from keras.layers.convolutional import Conv1D, MaxPooling1D
-from keras.layers import Dense, ELU, Activation, Dropout, Flatten
-from keras.layers.normalization import BatchNormalization
-from keras.optimizers import Adamax
-from keras import Input
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv1D, MaxPooling1D
+from tensorflow.keras.layers import Dense, ELU, Activation, Dropout, Flatten
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.optimizers import Adamax
+from tensorflow.keras import Input
 
 
 def get_model(config):
