@@ -163,8 +163,19 @@ def main(config):
 
     results = {}
     if num_unmon_sites == 0:  # Closed-world
+        print("\n" + "="*50)
+        print("CLOSED-WORLD RESULTS (Unmonitored = 0)")
+        print("="*50)
         log_setting('closed', predictions, results, **parameters)
     else:  # Open-world
+        print("\n" + "="*50)
+        print("CLOSED-WORLD METRICS (Evaluation without Threshold)")
+        print("="*50)
+        log_setting('closed', predictions, results, **parameters)
+        
+        print("\n" + "="*50)
+        print("OPEN-WORLD METRICS (Threshold Analysis)")
+        print("="*50)
         log_setting('open', predictions, results, **parameters)
 
     with open('job_result.json', 'w') as f:
