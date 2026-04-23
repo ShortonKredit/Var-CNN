@@ -1,0 +1,31 @@
+{
+    "data_dir": "/kaggle/working/",
+    "predictions_dir": "/kaggle/working/predictions/",
+    "model_name": "var-cnn",
+    "batch_size": 128,
+    "raw_cw_h5": "/kaggle/input/tor-wf-all-in-one/closed_world_balanced_183sites.h5",
+    "raw_ow_h5": "/kaggle/input/tor-wf-all-in-one/open_world_250k.h5",
+    "num_mon_sites": 150,
+    "num_mon_inst_train": 60,
+    "num_mon_inst_test": 15,
+    "num_unmon_sites_train": 6000,
+    "num_unmon_sites_test": 100000,
+    "mixture": [
+        [
+            "dir",
+            "metadata"
+        ],
+        [
+            "time",
+            "metadata"
+        ]
+    ],
+    "seq_length": 5000,
+    "df_epochs": 10,
+    "var_cnn_max_epochs": 100,
+    "var_cnn_base_patience": 10,
+    "dir_dilations": true,
+    "time_dilations": true,
+    "inter_time": true,
+    "scale_metadata": true
+}

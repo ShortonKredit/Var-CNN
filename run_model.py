@@ -4,7 +4,13 @@ from __future__ import division
 
 import json
 import os
+
+# --- TAT LOG RAC TENSORFLOW ---
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 import time
+import argparse
 import numpy as np
 
 import var_cnn
@@ -54,7 +60,7 @@ def train_and_val(config, model, callbacks, mixture_num, sub_model_name):
         data_generator.generate(config, 'training_data', mixture_num),
         steps_per_epoch=train_steps if train_size % batch_size == 0 else train_steps + 1,
         epochs=epochs,
-        verbose=1,
+        verbose=2, # In 1 dong moi epoch cho sach log
         callbacks=callbacks,
         validation_data=data_generator.generate(
             config, 'validation_data', mixture_num),
@@ -92,10 +98,16 @@ def predict(config, model, mixture_num, sub_model_name):
     print('Total test time: %f' % (test_time_end - test_time_start))
 
 
-with open('config.json') as config_file:
+# --- SỬ DỤNG ARGPARSE ĐỂ ĐỌC CONFIG-DRIVEN ---
+parser = argparse.ArgumentParser(description="Train Var-CNN using a specified config file.")
+parser.add_argument("--config", type=str, required=True, help="Path to config JSON file (e.g., config_high.json)")
+args = parser.parse_args()
+
+with open(args.config, 'r') as config_file:
     config = json.load(config_file)
     if config['model_name'] == 'df':
         update_config(config, {'mixture': [['dir']], 'batch_size': 128})
+
 
 num_mon_sites = config['num_mon_sites']
 num_mon_inst_test = config['num_mon_inst_test']

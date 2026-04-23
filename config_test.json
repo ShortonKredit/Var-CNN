@@ -1,16 +1,16 @@
 {
-    "data_dir": "data/",
-    "predictions_dir": "predictions/",
-    "_comment1": "====== World Size Params ======",
+    "data_dir": "/kaggle/working/",
+    "predictions_dir": "/kaggle/working/predictions/",
+    "model_name": "var-cnn",
+    "batch_size": 50,
+    "raw_cw_h5": "/kaggle/input/tor-wf-all-in-one/mini_cw_test.h5",
+    "raw_ow_h5": "/kaggle/input/tor-wf-all-in-one/mini_ow_test.h5",
+    "processed_h5": "/kaggle/working/mini_processed.h5",
     "num_mon_sites": 14,
     "num_mon_inst_train": 50,
     "num_mon_inst_test": 20,
     "num_unmon_sites_train": 800,
     "num_unmon_sites_test": 200,
-    "_comment2": "====== Attack Params ======",
-    "model_name": "var-cnn",
-    "batch_size": 50,
-    "_comment3": "====== Var-CNN Architecture Params ======",
     "mixture": [
         [
             "dir",
@@ -21,7 +21,6 @@
             "metadata"
         ]
     ],
-    "_comment4": "====== Other Params =======",
     "seq_length": 5000,
     "df_epochs": 10,
     "var_cnn_max_epochs": 10,
