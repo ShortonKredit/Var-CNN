@@ -126,12 +126,13 @@ epochs = config['var_cnn_max_epochs'] if model_name == 'var-cnn' \
     else config['df_epochs']
 is_valid_mixture(mixture)
 
-if not os.path.exists('%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites,
-                                            num_mon_inst,
-                                            num_unmon_sites_train,
-                                            num_unmon_sites_test)):
-    # preprocess_data.main(config)
-    print("[!] Warning: H5 data file not found. Please run prepare_openworld.py first.")
+data_file = config.get('processed_h5')
+if not data_file:
+    data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
+                                      num_unmon_sites_train, num_unmon_sites_test)
+
+if not os.path.exists(data_file):
+    print("[!] Warning: H5 data file not found at %s. Please run convert_data.py first." % data_file)
 
 for mixture_num, inner_comb in enumerate(mixture):
     sub_model_name = '_'.join(inner_comb)

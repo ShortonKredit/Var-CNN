@@ -59,9 +59,12 @@ def generate(config, data_type, mixture_num):
     use_metadata = 'metadata' in mixture[mixture_num]
 
     # Load all data into memory first so h5py file can be closed
-    with h5py.File('%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
-                                         num_unmon_sites_train,
-                                         num_unmon_sites_test), 'r') as f:
+    data_file = config.get('processed_h5')
+    if not data_file:
+        data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
+                                          num_unmon_sites_train, num_unmon_sites_test)
+
+    with h5py.File(data_file, 'r') as f:
         dir_seq = f[data_type + '/dir_seq'][:]
         time_seq = f[data_type + '/time_seq'][:]
         metadata = f[data_type + '/metadata'][:]
