@@ -60,8 +60,33 @@ def log_cw(results, sub_model_name, softmax, **parameters):
     print('%s model:' % sub_model_name)
     two_class_tpr, multi_class_tpr, fpr = find_accuracy(
         softmax, 0., **parameters)
-    print('\t accuracy: %s' % multi_class_tpr)
+    print('\t raw accuracy (TPR): %s' % multi_class_tpr)
     results['%s_acc' % sub_model_name] = multi_class_tpr
+
+    # --- TÍNH TOÁN BỔ SUNG PRECISION, RECALL, F1-SCORE ---
+    try:
+        from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+        actual_labels = parameters.get('actual_labels')
+        if actual_labels is not None:
+            actual_labels_idx = np.argmax(actual_labels, axis=1)
+            predicted_labels = np.argmax(softmax, axis=1)
+
+            acc_sk = accuracy_score(actual_labels_idx, predicted_labels)
+            prec = precision_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
+            rec = recall_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
+            f1 = f1_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
+
+            print('\t accuracy: %.2f%%' % (acc_sk * 100))
+            print('\t precision (macro): %.4f' % prec)
+            print('\t recall (macro): %.4f' % rec)
+            print('\t f1-score (macro): %.4f' % f1)
+
+            results['%s_accuracy_sk' % sub_model_name] = acc_sk
+            results['%s_precision' % sub_model_name] = prec
+            results['%s_recall' % sub_model_name] = rec
+            results['%s_f1_score' % sub_model_name] = f1
+    except ImportError:
+        print("\t (Scikit-learn is missing. Cannot compute Precision/Recall/F1)")
 
 
 def log_ow(results, sub_model_name, softmax, **parameters):
