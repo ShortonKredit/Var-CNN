@@ -294,7 +294,8 @@ def get_model(config, mixture_num, sub_model_name):
                   optimizer=Adam(0.001),
                   metrics=['accuracy'])
 
-    weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+    weights_dir = config.get('data_dir', '.')
+    weights_file = os.path.join(weights_dir, f"{model_name}_{sub_model_name}.weights.h5")
     
     lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
                                    cooldown=0, patience=base_patience,
