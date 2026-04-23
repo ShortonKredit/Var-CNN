@@ -49,12 +49,21 @@ def train_and_val(config, model, callbacks, mixture_num, sub_model_name):
 
     train_time_start = time.time()
     
-    weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+    # --- QUẢN LÝ ĐƯỜNG DẪN WEIGHTS ---
+    weights_dir = config.get('data_dir', '.')
+    weights_file = os.path.join(weights_dir, f"{model_name}_{sub_model_name}.weights.h5")
     
-    # RESUME TRAINING: Tự động load file weights đặc thù nếu có
     if os.path.exists(weights_file):
         print(f'---> Found existing weights file for {sub_model_name}, resuming training...')
         model.load_weights(weights_file)
+
+    # LƯU TRẢ KẾT QUẢ ĐÚNG CHỖ (ROOT KAGGLE)
+    from tensorflow.keras.callbacks import ModelCheckpoint
+    checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy', verbose=1,
+                                 save_best_only=True, mode='max', save_weights_only=True)
+    if 'callbacks' not in locals() or callbacks is None:
+        callbacks = []
+    callbacks.append(checkpoint)
 
     model.fit(
         data_generator.generate(config, 'training_data', mixture_num),

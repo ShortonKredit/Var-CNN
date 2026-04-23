@@ -102,9 +102,13 @@ def main(config):
     predictions_dir = config['predictions_dir']
     mixture = config['mixture']
 
-    with h5py.File('%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites,
-                                         num_mon_inst, num_unmon_sites_train,
-                                         num_unmon_sites_test), 'r') as f:
+    data_file = config.get('processed_h5')
+    if not data_file:
+        data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites,
+                                          num_mon_inst, num_unmon_sites_train,
+                                          num_unmon_sites_test)
+
+    with h5py.File(data_file, 'r') as f:
         test_labels = f['test_data/labels'][:]
 
     # Aggregates predictions from mixture models
