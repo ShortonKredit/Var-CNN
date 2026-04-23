@@ -46,11 +46,13 @@ def process():
     total_va = mon_val_size + unm_val_size
     total_te = mon_test_size + TE_UNM
 
+    N_CLASSES = N_MON if (TR_UNM == 0 and TE_UNM == 0) else N_MON + 1
+
     def create_empty_sets(size):
         return (np.zeros((size, SEQ_LEN, 1), dtype=np.int8), 
                 np.zeros((size, SEQ_LEN, 1), dtype=np.float32),
                 np.zeros((size, 7), dtype=np.float32),
-                np.zeros((size, N_MON + 1), dtype=np.float32))
+                np.zeros((size, N_CLASSES), dtype=np.float32))
 
     tr_d, tr_t, tr_m, tr_l = create_empty_sets(total_tr)
     va_d, va_t, va_m, va_l = create_empty_sets(total_va)
@@ -98,7 +100,7 @@ def process():
             te_d[te_idx:te_idx+TE_MON] = site_dir[test_idx]
             te_t[te_idx:te_idx+TE_MON] = site_time[test_idx]
             te_m[te_idx:te_idx+TE_MON] = site_meta[test_idx]
-            te_l[te_idx:te_idx+TE_MON] = to_categorical([site_id]*TE_MON, N_MON+1)
+            te_l[te_idx:te_idx+TE_MON] = to_categorical([site_id]*TE_MON, N_CLASSES)
             te_idx += TE_MON
 
             # Ghi vao Train Pool
@@ -119,48 +121,49 @@ def process():
     va_d[:mon_val_size] = mon_pool_d[v_idx]
     va_t[:mon_val_size] = mon_pool_t[v_idx]
     va_m[:mon_val_size] = mon_pool_m[v_idx]
-    va_l[:mon_val_size] = to_categorical(mon_pool_l[v_idx], N_MON+1)
+    va_l[:mon_val_size] = to_categorical(mon_pool_l[v_idx], N_CLASSES)
 
     tr_d[:mon_train_final_size] = mon_pool_d[t_idx]
     tr_t[:mon_train_final_size] = mon_pool_t[t_idx]
     tr_m[:mon_train_final_size] = mon_pool_m[t_idx]
-    tr_l[:mon_train_final_size] = to_categorical(mon_pool_l[t_idx], N_MON+1)
+    tr_l[:mon_train_final_size] = to_categorical(mon_pool_l[t_idx], N_CLASSES)
 
     del mon_pool_d, mon_pool_t, mon_pool_m, mon_pool_l
     gc.collect()
 
     # BƯỚC 2: XỬ LÝ OPEN WORLD (BIG BLOCK LOADING)
-    print(f"[*] Processing Unmonitored Data from {INPUT_OW}...")
-    with h5py.File(INPUT_OW, 'r') as f:
-        # Load logic: 150k dau -> Train Pool, 100k sau -> Test
-        # Chung ta load tung phan de tranh OOM tren may yeu
-        print("    -> Loading Training Unmonitored Block...")
-        unm_tr_dir = np.expand_dims(f['direction'][:TR_UNM], -1)
-        unm_tr_time = np.expand_dims(f['timing'][:TR_UNM], -1)
-        unm_tr_meta = f['metadata'][:TR_UNM]
+    if TR_UNM > 0 or TE_UNM > 0:
+        print(f"[*] Processing Unmonitored Data from {INPUT_OW}...")
+        with h5py.File(INPUT_OW, 'r') as f:
+            # Load logic: 150k dau -> Train Pool, 100k sau -> Test
+            # Chung ta load tung phan de tranh OOM tren may yeu
+            print("    -> Loading Training Unmonitored Block...")
+            unm_tr_dir = np.expand_dims(f['direction'][:TR_UNM], -1)
+            unm_tr_time = np.expand_dims(f['timing'][:TR_UNM], -1)
+            unm_tr_meta = f['metadata'][:TR_UNM]
 
-        unm_idx = np.random.permutation(TR_UNM)
-        uv_idx = unm_idx[:unm_val_size]
-        ut_idx = unm_idx[unm_val_size:]
+            unm_idx = np.random.permutation(TR_UNM)
+            uv_idx = unm_idx[:unm_val_size]
+            ut_idx = unm_idx[unm_val_size:]
 
-        va_d[mon_val_size:] = unm_tr_dir[uv_idx]
-        va_t[mon_val_size:] = unm_tr_time[uv_idx]
-        va_m[mon_val_size:] = unm_tr_meta[uv_idx]
-        va_l[mon_val_size:] = to_categorical([N_MON]*unm_val_size, N_MON+1)
+            va_d[mon_val_size:] = unm_tr_dir[uv_idx]
+            va_t[mon_val_size:] = unm_tr_time[uv_idx]
+            va_m[mon_val_size:] = unm_tr_meta[uv_idx]
+            va_l[mon_val_size:] = to_categorical([N_MON]*unm_val_size, N_CLASSES)
 
-        tr_d[mon_train_final_size:] = unm_tr_dir[ut_idx]
-        tr_t[mon_train_final_size:] = unm_tr_time[ut_idx]
-        tr_m[mon_train_final_size:] = unm_tr_meta[ut_idx]
-        tr_l[mon_train_final_size:] = to_categorical([N_MON]*unm_train_final_size, N_MON+1)
+            tr_d[mon_train_final_size:] = unm_tr_dir[ut_idx]
+            tr_t[mon_train_final_size:] = unm_tr_time[ut_idx]
+            tr_m[mon_train_final_size:] = unm_tr_meta[ut_idx]
+            tr_l[mon_train_final_size:] = to_categorical([N_MON]*unm_train_final_size, N_CLASSES)
 
-        del unm_tr_dir, unm_tr_time, unm_tr_meta
-        gc.collect()
+            del unm_tr_dir, unm_tr_time, unm_tr_meta
+            gc.collect()
 
-        print("    -> Loading Test Unmonitored Block...")
-        te_d[mon_test_size:] = np.expand_dims(f['direction'][TR_UNM:TR_UNM+TE_UNM], -1)
-        te_t[mon_test_size:] = np.expand_dims(f['timing'][TR_UNM:TR_UNM+TE_UNM], -1)
-        te_m[mon_test_size:] = f['metadata'][TR_UNM:TR_UNM+TE_UNM]
-        te_l[mon_test_size:] = to_categorical([N_MON]*TE_UNM, N_MON+1)
+            print("    -> Loading Test Unmonitored Block...")
+            te_d[mon_test_size:] = np.expand_dims(f['direction'][TR_UNM:TR_UNM+TE_UNM], -1)
+            te_t[mon_test_size:] = np.expand_dims(f['timing'][TR_UNM:TR_UNM+TE_UNM], -1)
+            te_m[mon_test_size:] = f['metadata'][TR_UNM:TR_UNM+TE_UNM]
+            te_l[mon_test_size:] = to_categorical([N_MON]*TE_UNM, N_CLASSES)
 
     gc.collect()
 

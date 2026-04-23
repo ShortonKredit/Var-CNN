@@ -23,7 +23,7 @@
     "seq_length": 5000,
     "df_epochs": 10,
     "var_cnn_max_epochs": 150,
-    "var_cnn_base_patience": 15,
+    "var_cnn_base_patience": 5,
     "dir_dilations": true,
     "time_dilations": true,
     "inter_time": true,
