@@ -71,9 +71,28 @@ def generate(config, data_type, mixture_num):
         labels = f[data_type + '/labels'][:]
 
     batch_start = 0
+    
+    # --- SHUFFLE DATA TO PREVENT CATASTROPHIC FORGETTING ---
+    indices = np.arange(len(labels))
+    if data_type != 'test_data':
+        np.random.shuffle(indices)
+        dir_seq = dir_seq[indices]
+        time_seq = time_seq[indices]
+        metadata = metadata[indices]
+        labels = labels[indices]
+
     while True:
         if batch_start >= len(labels):
             batch_start = 0
+            
+            # Shuffle again at the end of each epoch
+            if data_type != 'test_data':
+                np.random.shuffle(indices)
+                dir_seq = dir_seq[indices]
+                time_seq = time_seq[indices]
+                metadata = metadata[indices]
+                labels = labels[indices]
+
         batch_end = batch_start + batch_size
 
         inputs = {}

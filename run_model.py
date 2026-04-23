@@ -86,7 +86,8 @@ def predict(config, model, mixture_num, sub_model_name):
           % (model_name, sub_model_name))
 
     if model_name == 'var-cnn':
-        weights_file = f"{model_name}_{sub_model_name}.weights.h5"
+        weights_dir = config.get('data_dir', '.')
+        weights_file = os.path.join(weights_dir, f"{model_name}_{sub_model_name}.weights.h5")
         model.load_weights(weights_file)
 
     test_size = num_mon_sites * num_mon_inst_test + num_unmon_sites_test
