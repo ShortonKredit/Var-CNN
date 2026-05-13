@@ -4,7 +4,7 @@
     "model_name": "var-cnn",
     "batch_size": 50,
     "processed_h5": "/kaggle/input/datasets/shortonkrediz/varcnn-dir-iat-high-data/tiny_dir_iat_test.h5",
-    "num_mon_sites": 14,
+    "num_mon_sites": 150,
     "num_mon_inst_train": 50,
     "num_mon_inst_test": 20,
     "num_unmon_sites_train": 800,
