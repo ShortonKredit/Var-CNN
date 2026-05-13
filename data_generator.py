@@ -58,6 +58,7 @@ def generate(config, data_type, mixture_num):
     use_dir = 'dir' in mixture[mixture_num]
     use_time = 'time' in mixture[mixture_num]
     use_metadata = 'metadata' in mixture[mixture_num]
+    use_dir_iat = 'dir_iat' in mixture[mixture_num]
 
     # Load all data into memory first so h5py file can be closed
     data_file = config.get('processed_h5')
@@ -66,10 +67,20 @@ def generate(config, data_type, mixture_num):
                                           num_unmon_sites_train, num_unmon_sites_test)
 
     with h5py.File(data_file, 'r') as f:
-        dir_seq = f[data_type + '/dir_seq'][:]
-        time_seq = f[data_type + '/time_seq'][:]
-        metadata = f[data_type + '/metadata'][:]
+        dir_seq = f[data_type + '/dir_seq'][:] if 'dir_seq' in f[data_type] else None
+        time_seq = f[data_type + '/time_seq'][:] if 'time_seq' in f[data_type] else None
+        metadata = f[data_type + '/metadata'][:] if 'metadata' in f[data_type] else None
         labels = f[data_type + '/labels'][:]
+        
+        # Support for dir_iat key specifically requested
+        if use_dir_iat:
+            if 'dir_iat' in f[data_type]:
+                dir_iat = f[data_type + '/dir_iat'][:]
+            elif dir_seq is not None and time_seq is not None:
+                # Formula: sign(Direction) * log(1 + |Direction * IAT|)
+                dir_iat = np.sign(dir_seq) * np.log(1.0 + np.abs(time_seq))
+            else:
+                raise ValueError(f"dir_iat requested but not found in {data_file} and cannot be computed.")
 
     batch_start = 0
     
@@ -77,9 +88,10 @@ def generate(config, data_type, mixture_num):
     indices = np.arange(len(labels))
     if data_type != 'test_data':
         np.random.shuffle(indices)
-        dir_seq = dir_seq[indices]
-        time_seq = time_seq[indices]
-        metadata = metadata[indices]
+        if dir_seq is not None: dir_seq = dir_seq[indices]
+        if time_seq is not None: time_seq = time_seq[indices]
+        if metadata is not None: metadata = metadata[indices]
+        if use_dir_iat: dir_iat = dir_iat[indices]
         labels = labels[indices]
 
     while True:
@@ -89,9 +101,10 @@ def generate(config, data_type, mixture_num):
             # Shuffle again at the end of each epoch
             if data_type != 'test_data':
                 np.random.shuffle(indices)
-                dir_seq = dir_seq[indices]
-                time_seq = time_seq[indices]
-                metadata = metadata[indices]
+                if dir_seq is not None: dir_seq = dir_seq[indices]
+                if time_seq is not None: time_seq = time_seq[indices]
+                if metadata is not None: metadata = metadata[indices]
+                if use_dir_iat: dir_iat = dir_iat[indices]
                 labels = labels[indices]
 
         batch_end = batch_start + batch_size
@@ -105,6 +118,8 @@ def generate(config, data_type, mixture_num):
             inputs['time_input'] = time_seq[batch_start:batch_end]
         if use_metadata:
             inputs['metadata_input'] = metadata[batch_start:batch_end]
+        if use_dir_iat:
+            inputs['dir_iat_input'] = dir_iat[batch_start:batch_end]
 
         labels_batch = labels[batch_start:batch_end]
         batch_start += batch_size

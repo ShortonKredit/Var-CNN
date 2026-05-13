@@ -231,6 +231,7 @@ def get_model(config, mixture_num, sub_model_name):
     use_dir = 'dir' in mixture[mixture_num]
     use_time = 'time' in mixture[mixture_num]
     use_metadata = 'metadata' in mixture[mixture_num]
+    use_dir_iat = 'dir_iat' in mixture[mixture_num]
     dir_dilations = config['dir_dilations']
     time_dilations = config['time_dilations']
     seq_length = config['seq_length']
@@ -252,6 +253,14 @@ def get_model(config, mixture_num, sub_model_name):
         else:
             time_output = ResNet18(time_input, 'time', block=basic_1d)
 
+    # Constructs dir_iat ResNet
+    if use_dir_iat:
+        dir_iat_input = Input(shape=(seq_length, 1,), name='dir_iat_input')
+        if dir_dilations:
+            dir_iat_output = ResNet18(dir_iat_input, 'dir_iat', block=dilated_basic_1d)
+        else:
+            dir_iat_output = ResNet18(dir_iat_input, 'dir_iat', block=basic_1d)
+
     # Construct MLP for metadata
     if use_metadata:
         metadata_input = Input(shape=(7,), name='metadata_input')
@@ -269,6 +278,9 @@ def get_model(config, mixture_num, sub_model_name):
     if use_time:
         input_params.append(time_input)
         concat_params.append(time_output)
+    if use_dir_iat:
+        input_params.append(dir_iat_input)
+        concat_params.append(dir_iat_output)
     if use_metadata:
         input_params.append(metadata_input)
         concat_params.append(metadata_output)
