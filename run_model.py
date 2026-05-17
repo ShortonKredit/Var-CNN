@@ -33,7 +33,7 @@ def is_valid_mixture(mixture):
     for inner_comb in mixture:
         assert isinstance(inner_comb, list) and len(inner_comb) > 0
         for model in inner_comb:
-            assert model in ['dir', 'time', 'metadata', 'dir_iat']
+            assert model in ['dir', 'time', 'metadata', 'dir_iat', 'dir_iat_log', 'dir_x_iat']
 
 
 def train_and_val(config, model, callbacks, mixture_num, sub_model_name):
