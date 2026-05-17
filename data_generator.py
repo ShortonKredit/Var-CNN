@@ -58,7 +58,8 @@ def generate(config, data_type, mixture_num):
     use_dir = 'dir' in mixture[mixture_num]
     use_time = 'time' in mixture[mixture_num]
     use_metadata = 'metadata' in mixture[mixture_num]
-    use_dir_iat = 'dir_iat' in mixture[mixture_num]
+    use_dir_iat_log = 'dir_iat_log' in mixture[mixture_num]
+    use_dir_x_iat = 'dir_x_iat' in mixture[mixture_num]
 
     # Load all data into memory first so h5py file can be closed
     data_file = config.get('processed_h5')
@@ -72,15 +73,18 @@ def generate(config, data_type, mixture_num):
         metadata = f[data_type + '/metadata'][:] if 'metadata' in f[data_type] else None
         labels = f[data_type + '/labels'][:]
         
-        # Support for dir_iat key specifically requested
-        if use_dir_iat:
-            if 'dir_iat' in f[data_type]:
-                dir_iat = f[data_type + '/dir_iat'][:]
-            elif dir_seq is not None and time_seq is not None:
-                # Formula: sign(Direction) * log(1 + |Direction * IAT|)
-                dir_iat = np.sign(dir_seq) * np.log(1.0 + np.abs(time_seq))
+        # Read new keys directly from H5 if requested
+        if use_dir_iat_log:
+            if 'dir_iat_log' in f[data_type]:
+                dir_iat_log = f[data_type + '/dir_iat_log'][:]
             else:
-                raise ValueError(f"dir_iat requested but not found in {data_file} and cannot be computed.")
+                raise ValueError(f"dir_iat_log requested but not found in {data_file}")
+                
+        if use_dir_x_iat:
+            if 'dir_x_iat' in f[data_type]:
+                dir_x_iat = f[data_type + '/dir_x_iat'][:]
+            else:
+                raise ValueError(f"dir_x_iat requested but not found in {data_file}")
 
     batch_start = 0
     
@@ -91,7 +95,8 @@ def generate(config, data_type, mixture_num):
         if dir_seq is not None: dir_seq = dir_seq[indices]
         if time_seq is not None: time_seq = time_seq[indices]
         if metadata is not None: metadata = metadata[indices]
-        if use_dir_iat: dir_iat = dir_iat[indices]
+        if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
+        if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
         labels = labels[indices]
 
     while True:
@@ -104,7 +109,8 @@ def generate(config, data_type, mixture_num):
                 if dir_seq is not None: dir_seq = dir_seq[indices]
                 if time_seq is not None: time_seq = time_seq[indices]
                 if metadata is not None: metadata = metadata[indices]
-                if use_dir_iat: dir_iat = dir_iat[indices]
+                if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
+                if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
                 labels = labels[indices]
 
         batch_end = batch_start + batch_size
@@ -118,8 +124,10 @@ def generate(config, data_type, mixture_num):
             inputs['time_input'] = time_seq[batch_start:batch_end]
         if use_metadata:
             inputs['metadata_input'] = metadata[batch_start:batch_end]
-        if use_dir_iat:
-            inputs['dir_iat_input'] = dir_iat[batch_start:batch_end]
+        if use_dir_iat_log:
+            inputs['dir_iat_log_input'] = dir_iat_log[batch_start:batch_end]
+        if use_dir_x_iat:
+            inputs['dir_x_iat_input'] = dir_x_iat[batch_start:batch_end]
 
         labels_batch = labels[batch_start:batch_end]
         batch_start += batch_size

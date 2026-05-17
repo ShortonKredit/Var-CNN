@@ -18,6 +18,19 @@
         [
             "time",
             "metadata"
+        ],
+        [
+            "dir_iat_log",
+            "metadata"
+        ],
+        [
+            "dir_x_iat",
+            "metadata"
+        ],
+        [
+            "dir",
+            "time",
+            "metadata"
         ]
     ],
     "seq_length": 5000,
