@@ -60,6 +60,7 @@ def generate(config, data_type, mixture_num):
     use_metadata = 'metadata' in mixture[mixture_num]
     use_dir_iat_log = 'dir_iat_log' in mixture[mixture_num]
     use_dir_x_iat = 'dir_x_iat' in mixture[mixture_num]
+    use_dir_iat_raw = 'dir_iat_raw' in mixture[mixture_num]
 
     # Load all data into memory first so h5py file can be closed
     data_file = config.get('processed_h5')
@@ -85,6 +86,12 @@ def generate(config, data_type, mixture_num):
                 dir_x_iat = f[data_type + '/dir_x_iat'][:]
             else:
                 raise ValueError(f"dir_x_iat requested but not found in {data_file}")
+                
+        if use_dir_iat_raw:
+            if 'dir_iat_raw' in f[data_type]:
+                dir_iat_raw = f[data_type + '/dir_iat_raw'][:]
+            else:
+                raise ValueError(f"dir_iat_raw requested but not found in {data_file}")
 
     batch_start = 0
     
@@ -97,6 +104,7 @@ def generate(config, data_type, mixture_num):
         if metadata is not None: metadata = metadata[indices]
         if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
         if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
+        if use_dir_iat_raw and dir_iat_raw is not None: dir_iat_raw = dir_iat_raw[indices]
         labels = labels[indices]
 
     while True:
@@ -111,6 +119,7 @@ def generate(config, data_type, mixture_num):
                 if metadata is not None: metadata = metadata[indices]
                 if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
                 if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
+                if use_dir_iat_raw and dir_iat_raw is not None: dir_iat_raw = dir_iat_raw[indices]
                 labels = labels[indices]
 
         batch_end = batch_start + batch_size
@@ -128,6 +137,8 @@ def generate(config, data_type, mixture_num):
             inputs['dir_iat_log_input'] = dir_iat_log[batch_start:batch_end]
         if use_dir_x_iat:
             inputs['dir_x_iat_input'] = dir_x_iat[batch_start:batch_end]
+        if use_dir_iat_raw:
+            inputs['dir_iat_raw_input'] = dir_iat_raw[batch_start:batch_end]
 
         labels_batch = labels[batch_start:batch_end]
         batch_start += batch_size

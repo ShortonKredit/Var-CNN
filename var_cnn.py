@@ -233,6 +233,7 @@ def get_model(config, mixture_num, sub_model_name):
     use_metadata = 'metadata' in mixture[mixture_num]
     use_dir_iat_log = 'dir_iat_log' in mixture[mixture_num]
     use_dir_x_iat = 'dir_x_iat' in mixture[mixture_num]
+    use_dir_iat_raw = 'dir_iat_raw' in mixture[mixture_num]
     dir_dilations = config['dir_dilations']
     time_dilations = config['time_dilations']
     seq_length = config['seq_length']
@@ -270,6 +271,14 @@ def get_model(config, mixture_num, sub_model_name):
         else:
             dir_x_iat_output = ResNet18(dir_x_iat_input, 'dir_x_iat', block=basic_1d)
 
+    # Constructs dir_iat_raw ResNet
+    if use_dir_iat_raw:
+        dir_iat_raw_input = Input(shape=(seq_length, 1,), name='dir_iat_raw_input')
+        if dir_dilations:
+            dir_iat_raw_output = ResNet18(dir_iat_raw_input, 'dir_iat_raw', block=dilated_basic_1d)
+        else:
+            dir_iat_raw_output = ResNet18(dir_iat_raw_input, 'dir_iat_raw', block=basic_1d)
+
     # Construct MLP for metadata
     if use_metadata:
         metadata_input = Input(shape=(7,), name='metadata_input')
@@ -293,6 +302,9 @@ def get_model(config, mixture_num, sub_model_name):
     if use_dir_x_iat:
         input_params.append(dir_x_iat_input)
         concat_params.append(dir_x_iat_output)
+    if use_dir_iat_raw:
+        input_params.append(dir_iat_raw_input)
+        concat_params.append(dir_iat_raw_output)
     if use_metadata:
         input_params.append(metadata_input)
         concat_params.append(metadata_output)
