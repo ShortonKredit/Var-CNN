@@ -3,7 +3,7 @@
     "predictions_dir": "/kaggle/working/predictions/",
     "model_name": "var-cnn",
     "batch_size": 256,
-    "processed_h5": "/kaggle/input/varcnn-dir-iat-high-data/150_2000_150000_100000_final1.h5",
+    "processed_h5": "/kaggle/input/datasets/shortonkrediz/varcnn-dir-iat-high-data/150_2000_150000_100000_final1.h5",
     "num_mon_sites": 150,
     "num_mon_inst_train": 1800,
     "num_mon_inst_test": 200,
