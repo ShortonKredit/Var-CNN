@@ -99,13 +99,6 @@ def generate(config, data_type, mixture_num):
     indices = np.arange(len(labels))
     if data_type != 'test_data':
         np.random.shuffle(indices)
-        if dir_seq is not None: dir_seq = dir_seq[indices]
-        if time_seq is not None: time_seq = time_seq[indices]
-        if metadata is not None: metadata = metadata[indices]
-        if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
-        if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
-        if use_dir_iat_raw and dir_iat_raw is not None: dir_iat_raw = dir_iat_raw[indices]
-        labels = labels[indices]
 
     while True:
         if batch_start >= len(labels):
@@ -114,33 +107,27 @@ def generate(config, data_type, mixture_num):
             # Shuffle again at the end of each epoch
             if data_type != 'test_data':
                 np.random.shuffle(indices)
-                if dir_seq is not None: dir_seq = dir_seq[indices]
-                if time_seq is not None: time_seq = time_seq[indices]
-                if metadata is not None: metadata = metadata[indices]
-                if use_dir_iat_log and dir_iat_log is not None: dir_iat_log = dir_iat_log[indices]
-                if use_dir_x_iat and dir_x_iat is not None: dir_x_iat = dir_x_iat[indices]
-                if use_dir_iat_raw and dir_iat_raw is not None: dir_iat_raw = dir_iat_raw[indices]
-                labels = labels[indices]
 
         batch_end = batch_start + batch_size
+        batch_indices = indices[batch_start:batch_end]
 
         inputs = {}
 
         # Accesses and stores relevant data slices
         if use_dir:
-            inputs['dir_input'] = dir_seq[batch_start:batch_end]
+            inputs['dir_input'] = dir_seq[batch_indices]
         if use_time:
-            inputs['time_input'] = time_seq[batch_start:batch_end]
+            inputs['time_input'] = time_seq[batch_indices]
         if use_metadata:
-            inputs['metadata_input'] = metadata[batch_start:batch_end]
+            inputs['metadata_input'] = metadata[batch_indices]
         if use_dir_iat_log:
-            inputs['dir_iat_log_input'] = dir_iat_log[batch_start:batch_end]
+            inputs['dir_iat_log_input'] = dir_iat_log[batch_indices]
         if use_dir_x_iat:
-            inputs['dir_x_iat_input'] = dir_x_iat[batch_start:batch_end]
+            inputs['dir_x_iat_input'] = dir_x_iat[batch_indices]
         if use_dir_iat_raw:
-            inputs['dir_iat_raw_input'] = dir_iat_raw[batch_start:batch_end]
+            inputs['dir_iat_raw_input'] = dir_iat_raw[batch_indices]
 
-        labels_batch = labels[batch_start:batch_end]
+        labels_batch = labels[batch_indices]
         batch_start += batch_size
 
         # Test data does not use labels
