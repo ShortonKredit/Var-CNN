@@ -1,38 +1,10 @@
 import h5py
 import numpy as np
-import threading
 
-class ThreadSafeIter:
-    """Takes an iterator/generator and makes it thread-safe.
-
-    Does this by serializing call to the `next` method of given iterator/
-    generator. See https://anandology.com/blog/using-iterators-and-generators/
-    for more information.
-    """
-
-    def __init__(self, it):
-        self.it = it
-        self.lock = threading.Lock()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):  # Py3
-        with self.lock:
-            return next(self.it)
-
-    def next(self):  # Py2
-        with self.lock:
-            return self.it.next()
-
-
-def thread_safe_generator(f):
-    """Decorator that takes a generator function and makes it thread-safe."""
-
-    def g(*a, **kw):
-        return ThreadSafeIter(f(*a, **kw))
-
-    return g
+try:
+    from tensorflow.keras.utils import Sequence
+except ImportError:
+    from keras.utils import Sequence
 
 
 def safe_h5_read(dataset, indices):
@@ -52,111 +24,146 @@ def safe_h5_read(dataset, indices):
     return data[unsort_idx]
 
 
-@thread_safe_generator
+class H5DataGenerator(Sequence):
+    """Sequence generator that yields batches of data from H5 file with low memory profile."""
+    
+    def __init__(self, config, data_type, mixture_num=None):
+        self.config = config
+        self.data_type = data_type
+        self.mixture_num = mixture_num
+        self.batch_size = config['batch_size']
+        self.data_file = config.get('processed_h5')
+        
+        if not self.data_file:
+            num_mon_sites = config['num_mon_sites']
+            num_mon_inst_train = config['num_mon_inst_train']
+            num_mon_inst_test = config['num_mon_inst_test']
+            num_mon_inst = num_mon_inst_train + num_mon_inst_test
+            num_unmon_sites_train = config['num_unmon_sites_train']
+            num_unmon_sites_test = config['num_unmon_sites_test']
+            data_dir = config['data_dir']
+            self.data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
+                                              num_unmon_sites_train, num_unmon_sites_test)
+            
+        # Determine sequence and metadata configuration
+        if "sequence_dataset" in self.config:
+            # New flat config style
+            self.seq_ds_name = self.config["sequence_dataset"]
+            self.seq_input_name = self.config["sequence_input_name"]
+            self.meta_ds_name = self.config.get("metadata_dataset")
+            self.meta_type = self.config.get("metadata_type")
+            self.wfmeta_k = self.config.get("wfmeta_k", 10)
+        else:
+            # Backward compatibility fallback
+            if self.mixture_num is None:
+                raise ValueError("Either mixture_num must be provided or sequence_dataset must be in config.")
+            mixture = self.config['mixture']
+            inner_comb = mixture[self.mixture_num]
+            
+            self.seq_ds_name = None
+            self.seq_input_name = None
+            if 'dir' in inner_comb:
+                self.seq_ds_name = 'dir_seq'
+                self.seq_input_name = 'dir_input'
+            elif 'time' in inner_comb:
+                self.seq_ds_name = 'time_seq'
+                self.seq_input_name = 'time_input'
+            elif 'dir_iat_log' in inner_comb:
+                self.seq_ds_name = 'dir_iat_log'
+                self.seq_input_name = 'dir_iat_log_input'
+            elif 'dir_x_iat' in inner_comb:
+                self.seq_ds_name = 'dir_x_iat'
+                self.seq_input_name = 'dir_x_iat_input'
+            elif 'dir_iat_raw' in inner_comb:
+                self.seq_ds_name = 'dir_iat_raw'
+                self.seq_input_name = 'dir_iat_raw_input'
+                
+            self.meta_ds_name = 'metadata' if 'metadata' in inner_comb else None
+            self.meta_type = 'metadata'
+            self.wfmeta_k = 10
+            
+        # Open file once to verify total sample size
+        with h5py.File(self.data_file, 'r') as f:
+            self.num_samples = len(f[self.data_type]['labels'])
+            
+        self.indices = np.arange(self.num_samples)
+        
+        # Only shuffle training data
+        self.shuffle = (self.data_type == 'training_data')
+        if self.shuffle:
+            np.random.shuffle(self.indices)
+            
+        # Initialize file and dataset references as None for lazy evaluation (thread-safety)
+        self.f = None
+        self.grp = None
+        self.seq_ds = None
+        self.meta_ds = None
+        self.labels_ds = None
+        
+    def _open_file(self):
+        """Open H5 file and retrieve dataset links lazily."""
+        if self.f is None:
+            self.f = h5py.File(self.data_file, 'r')
+            self.grp = self.f[self.data_type]
+            self.seq_ds = self.grp[self.seq_ds_name] if (self.seq_ds_name and self.seq_ds_name in self.grp) else None
+            self.meta_ds = self.grp[self.meta_ds_name] if (self.meta_ds_name and self.meta_ds_name in self.grp) else None
+            self.labels_ds = self.grp['labels']
+
+    def __len__(self):
+        """Returns the number of batches per epoch."""
+        return int(np.ceil(self.num_samples / self.batch_size))
+
+    def __getitem__(self, index):
+        """Generates one batch of data."""
+        self._open_file()
+        
+        start = index * self.batch_size
+        end = min(start + self.batch_size, self.num_samples)
+        
+        # Safety fallback
+        if start >= self.num_samples:
+            start = 0
+            end = self.batch_size
+            
+        batch_indices = self.indices[start:end]
+        
+        inputs = {}
+        
+        # Load sequence batch
+        if self.seq_ds is not None:
+            seq_batch = safe_h5_read(self.seq_ds, batch_indices)
+            inputs[self.seq_input_name] = seq_batch.astype(np.float32)
+
+        # Load metadata batch
+        if self.meta_ds is not None:
+            meta_batch = safe_h5_read(self.meta_ds, batch_indices)
+            if self.meta_type == "wfmeta10" or self.meta_ds_name == "wfmeta":
+                meta_batch = meta_batch[:, :self.wfmeta_k]
+            inputs['metadata_input'] = meta_batch.astype(np.float32)
+
+        labels_batch = safe_h5_read(self.labels_ds, batch_indices).astype(np.float32)
+
+        if self.data_type == 'test_data':
+            return (inputs,)
+        else:
+            return (inputs, labels_batch)
+
+    def on_epoch_end(self):
+        """Re-shuffles training indices at the end of every epoch."""
+        if self.shuffle:
+            np.random.shuffle(self.indices)
+            
+    def close(self):
+        """Close the H5 file handle if open."""
+        if self.f is not None:
+            self.f.close()
+            self.f = None
+            self.grp = None
+            self.seq_ds = None
+            self.meta_ds = None
+            self.labels_ds = None
+
+
 def generate(config, data_type, mixture_num=None):
-    """Yields batch of data with the correct content and formatting.
-
-    Args:
-        config (dict): Deserialized JSON config file (see config.json)
-        data_type (str): Either 'training_data', 'validation_data', or
-            'test_data'
-        mixture_num (int, optional): Index of the mixture in the config
-    """
-    batch_size = config['batch_size']
-    data_file = config.get('processed_h5')
-    if not data_file:
-        num_mon_sites = config['num_mon_sites']
-        num_mon_inst_train = config['num_mon_inst_train']
-        num_mon_inst_test = config['num_mon_inst_test']
-        num_mon_inst = num_mon_inst_train + num_mon_inst_test
-        num_unmon_sites_train = config['num_unmon_sites_train']
-        num_unmon_sites_test = config['num_unmon_sites_test']
-        data_dir = config['data_dir']
-        data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites, num_mon_inst,
-                                          num_unmon_sites_train, num_unmon_sites_test)
-
-    # Determine sequence and metadata configuration
-    if "sequence_dataset" in config:
-        # New flat config style
-        seq_ds_name = config["sequence_dataset"]
-        seq_input_name = config["sequence_input_name"]
-        meta_ds_name = config.get("metadata_dataset")
-        meta_type = config.get("metadata_type")
-        wfmeta_k = config.get("wfmeta_k", 10)
-    else:
-        # Backward compatibility fallback
-        if mixture_num is None:
-            raise ValueError("Either mixture_num must be provided or sequence_dataset must be in config.")
-        mixture = config['mixture']
-        inner_comb = mixture[mixture_num]
-        
-        # Mapping old names
-        seq_ds_name = None
-        seq_input_name = None
-        if 'dir' in inner_comb:
-            seq_ds_name = 'dir_seq'
-            seq_input_name = 'dir_input'
-        elif 'time' in inner_comb:
-            seq_ds_name = 'time_seq'
-            seq_input_name = 'time_input'
-        elif 'dir_iat_log' in inner_comb:
-            seq_ds_name = 'dir_iat_log'
-            seq_input_name = 'dir_iat_log_input'
-        elif 'dir_x_iat' in inner_comb:
-            seq_ds_name = 'dir_x_iat'
-            seq_input_name = 'dir_x_iat_input'
-        elif 'dir_iat_raw' in inner_comb:
-            seq_ds_name = 'dir_iat_raw'
-            seq_input_name = 'dir_iat_raw_input'
-            
-        meta_ds_name = 'metadata' if 'metadata' in inner_comb else None
-        meta_type = 'metadata'
-        wfmeta_k = 10
-
-    # Stream data from H5 file batch by batch
-    with h5py.File(data_file, 'r') as f:
-        grp = f[data_type]
-        
-        seq_ds = grp[seq_ds_name] if (seq_ds_name and seq_ds_name in grp) else None
-        meta_ds = grp[meta_ds_name] if (meta_ds_name and meta_ds_name in grp) else None
-        labels_ds = grp['labels']
-        
-        num_samples = len(labels_ds)
-        indices = np.arange(num_samples)
-        
-        # Shuffle indices for training/validation (not for test_data)
-        if data_type != 'test_data':
-            np.random.shuffle(indices)
-
-        batch_start = 0
-        while True:
-            if batch_start >= num_samples:
-                batch_start = 0
-                if data_type != 'test_data':
-                    np.random.shuffle(indices)
-
-            batch_indices = indices[batch_start:batch_start + batch_size]
-            batch_start += batch_size
-
-            inputs = {}
-            
-            # Load sequence batch
-            if seq_ds is not None:
-                seq_batch = safe_h5_read(seq_ds, batch_indices)
-                inputs[seq_input_name] = seq_batch.astype(np.float32)
-
-            # Load metadata batch
-            if meta_ds is not None:
-                meta_batch = safe_h5_read(meta_ds, batch_indices)
-                if meta_type == "wfmeta10" or meta_ds_name == "wfmeta":
-                    # Extract top-k ANOVA features (defaults to 10)
-                    meta_batch = meta_batch[:, :wfmeta_k]
-                inputs['metadata_input'] = meta_batch.astype(np.float32)
-
-            labels_batch = safe_h5_read(labels_ds, batch_indices).astype(np.float32)
-
-            # Test data does not yield labels
-            if data_type == 'test_data':
-                yield (inputs,)
-            else:
-                yield (inputs, labels_batch)
+    """Wrapper function returning Sequence generator instance."""
+    return H5DataGenerator(config, data_type, mixture_num)
