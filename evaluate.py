@@ -7,7 +7,6 @@ import json
 import h5py
 import os
 
-# Nạp an toàn sklearn nếu có trong môi trường Kaggle/Colab
 try:
     from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 except ImportError:
@@ -21,11 +20,12 @@ except ImportError:
         return 0.0
 
 
-def find_accuracy(model_predictions, conf_thresh, actual_labels,
-                  num_mon_sites, num_mon_inst_test,
-                  num_unmon_sites_test, num_unmon_sites):
+def find_accuracy(model_predictions, conf_thresh, actual_labels=None,
+                  num_mon_sites=None, num_mon_inst_test=None,
+                  num_unmon_sites_test=None, num_unmon_sites=None):
     """Compute TPR and FPR based on softmax output predictions."""
 
+    # Calculates output classes (classes with the highest probability)
     actual_labels_idx = np.argmax(actual_labels, axis=1)
 
     # Changes predictions according to confidence threshold
@@ -83,16 +83,11 @@ def find_accuracy(model_predictions, conf_thresh, actual_labels,
 def log_cw(results, sub_model_name, softmax, **parameters):
     print('%s model:' % sub_model_name)
     two_class_tpr, multi_class_tpr, fpr = find_accuracy(
-        softmax, 0.,
-        actual_labels=parameters['actual_labels'],
-        num_mon_sites=parameters['num_mon_sites'],
-        num_mon_inst_test=parameters['num_mon_inst_test'],
-        num_unmon_sites_test=parameters['num_unmon_sites_test'],
-        num_unmon_sites=parameters['num_unmon_sites']
-    )
+        softmax, 0., **parameters)
     print('\t raw accuracy (TPR): %s' % multi_class_tpr)
     results['%s_acc' % sub_model_name] = multi_class_tpr
 
+    # --- TÍNH TOÁN BỔ SUNG PRECISION, RECALL, F1-SCORE ---
     actual_labels = parameters.get('actual_labels')
     if actual_labels is not None:
         actual_labels_idx = np.argmax(actual_labels, axis=1)
@@ -118,13 +113,7 @@ def log_ow(results, sub_model_name, softmax, **parameters):
     print('%s model:' % sub_model_name)
     for conf_thresh in np.arange(0, 1.01, 0.1):
         two_class_tpr, multi_class_tpr, fpr = find_accuracy(
-            softmax, conf_thresh,
-            actual_labels=parameters['actual_labels'],
-            num_mon_sites=parameters['num_mon_sites'],
-            num_mon_inst_test=parameters['num_mon_inst_test'],
-            num_unmon_sites_test=parameters['num_unmon_sites_test'],
-            num_unmon_sites=parameters['num_unmon_sites']
-        )
+            softmax, conf_thresh, **parameters)
         print('\t conf: %f' % conf_thresh)
         print('\t \t two-class TPR: %s' % two_class_tpr)
         print('\t \t multi-class TPR: %s' % multi_class_tpr)
@@ -145,94 +134,9 @@ def log_setting(setting, predictions, results, **parameters):
             log_ow(results, sub_model_name, softmax, **parameters)
 
 
-def evaluate_closed_world(softmax, test_labels, target_dir, model_id):
-    """Computes closed world evaluation metrics: accuracy, precision, recall, f1."""
-    actual_labels_idx = np.argmax(test_labels, axis=1)
-    predicted_labels = np.argmax(softmax, axis=1)
-
-    results = {}
-    acc = accuracy_score(actual_labels_idx, predicted_labels)
-    prec = precision_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-    rec = recall_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-    f1 = f1_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-
-    print("\n" + "="*50)
-    print("CLOSED-WORLD EVALUATION RESULTS")
-    print("="*50)
-    print('Accuracy: %.2f%%' % (acc * 100))
-    print('Precision (macro): %.4f' % prec)
-    print('Recall (macro): %.4f' % rec)
-    print('F1-Score (macro): %.4f' % f1)
-
-    results['accuracy'] = float(acc)
-    results['precision'] = float(prec)
-    results['recall'] = float(rec)
-    results['f1_score'] = float(f1)
-
-    result_path = os.path.join(target_dir, f"{model_id}_result.json")
-    with open(result_path, 'w') as f:
-        json.dump(results, f, sort_keys=True, indent=4)
-    print(f"Saved evaluation results to {result_path}")
-    return results
-
-
-def evaluate_open_world(softmax, test_labels, num_mon_sites, num_mon_inst_test, num_unmon_sites_test, num_unmon_sites, target_dir, model_id):
-    """Computes open world evaluation metrics: threshold sweep for TPR, FPR, and confidence reject."""
-    results = {}
-    
-    # 1. Đo các chỉ số CW trên tập OW trước (đánh giá không có ngưỡng chặn)
-    actual_labels_idx = np.argmax(test_labels, axis=1)
-    predicted_labels = np.argmax(softmax, axis=1)
-    
-    acc = accuracy_score(actual_labels_idx, predicted_labels)
-    prec = precision_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-    rec = recall_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-    f1 = f1_score(actual_labels_idx, predicted_labels, average='macro', zero_division=0)
-    
-    print("\n" + "="*50)
-    print("OPEN-WORLD: CLOSED-WORLD METRICS (Evaluation without Threshold)")
-    print("="*50)
-    print('Accuracy: %.2f%%' % (acc * 100))
-    print('Precision (macro): %.4f' % prec)
-    print('Recall (macro): %.4f' % rec)
-    print('F1-Score (macro): %.4f' % f1)
-    
-    results['cw_accuracy'] = float(acc)
-    results['cw_precision'] = float(prec)
-    results['cw_recall'] = float(rec)
-    results['cw_f1_score'] = float(f1)
-    
-    # 2. Quét Threshold đo đạc tính chất Open-world
-    print("\n" + "="*50)
-    print("OPEN-WORLD METRICS (Threshold Analysis)")
-    print("="*50)
-    
-    for conf_thresh in np.arange(0, 1.01, 0.1):
-        two_class_tpr, multi_class_tpr, fpr = find_accuracy(
-            softmax, conf_thresh, actual_labels=test_labels,
-            num_mon_sites=num_mon_sites, num_mon_inst_test=num_mon_inst_test,
-            num_unmon_sites_test=num_unmon_sites_test, num_unmon_sites=num_unmon_sites
-        )
-        print('conf: %f' % conf_thresh)
-        print('\t two-class TPR: %s' % two_class_tpr)
-        print('\t multi-class TPR: %s' % multi_class_tpr)
-        print('\t FPR: %s' % fpr)
-        
-        prefix = '%s_%f' % (model_id, conf_thresh)
-        results['%s_two_TPR' % prefix] = two_class_tpr
-        results['%s_multi_TPR' % prefix] = multi_class_tpr
-        results['%s_FPR' % prefix] = fpr
-
-    result_path = os.path.join(target_dir, f"{model_id}_result.json")
-    with open(result_path, 'w') as f:
-        json.dump(results, f, sort_keys=True, indent=4)
-    print(f"Saved evaluation results to {result_path}")
-    return results
-
-
 def main(config):
     is_flat = "sequence_dataset" in config
-    
+
     num_mon_sites = config['num_mon_sites']
     num_mon_inst_test = config['num_mon_inst_test']
     num_mon_inst_train = config['num_mon_inst_train']
@@ -241,7 +145,7 @@ def main(config):
     num_unmon_sites_train = config['num_unmon_sites_train']
     num_unmon_sites = num_unmon_sites_test + num_unmon_sites_train
 
-    data_dir = config['data_dir']
+    data_dir = config.get('data_dir', '.')
     data_file = config.get('processed_h5')
     if not data_file:
         data_file = '%s%d_%d_%d_%d.h5' % (data_dir, num_mon_sites,
@@ -258,25 +162,50 @@ def main(config):
             target_dir = os.path.join(output_dir, model_id)
         else:
             target_dir = output_dir
-            
+
         predictions_path = os.path.join(target_dir, f"{model_id}_model.npy")
         if not os.path.exists(predictions_path):
             raise FileNotFoundError(f"Predictions not found at {predictions_path}")
-            
+
         softmax = np.load(predictions_path)
         
         scenario = config.get("scenario", "closed_world")
         is_cw = (scenario == "closed_world") or (test_labels.shape[1] == 100) or (num_unmon_sites == 0)
-        
+
+        results = {}
+        parameters = {
+            'actual_labels': test_labels,
+            'num_mon_sites': num_mon_sites,
+            'num_mon_inst_test': num_mon_inst_test,
+            'num_unmon_sites_test': num_unmon_sites_test,
+            'num_unmon_sites': num_unmon_sites
+        }
+
         if is_cw:
-            evaluate_closed_world(softmax, test_labels, target_dir, model_id)
+            print("\n" + "="*50)
+            print("CLOSED-WORLD RESULTS")
+            print("="*50)
+            log_cw(results, model_id, softmax, **parameters)
         else:
-            evaluate_open_world(softmax, test_labels, num_mon_sites, num_mon_inst_test, num_unmon_sites_test, num_unmon_sites, target_dir, model_id)
+            print("\n" + "="*50)
+            print("CLOSED-WORLD METRICS (Evaluation without Threshold)")
+            print("="*50)
+            log_cw(results, model_id, softmax, **parameters)
+            
+            print("\n" + "="*50)
+            print("OPEN-WORLD METRICS (Threshold Analysis)")
+            print("="*50)
+            log_ow(results, model_id, softmax, **parameters)
+
+        result_path = os.path.join(target_dir, f"{model_id}_result.json")
+        with open(result_path, 'w') as f:
+            json.dump(results, f, sort_keys=True, indent=4)
+        print(f"Saved evaluation results to {result_path}")
     else:
-        # Fallback chạy theo mixture (ensembles) cũ
         predictions_dir = config['predictions_dir']
         mixture = config['mixture']
 
+        # Aggregates predictions from mixture models
         predictions = {}
         ensemble_softmax = None
         for inner_comb in mixture:
@@ -296,9 +225,11 @@ def main(config):
                       'num_unmon_sites_test': num_unmon_sites_test,
                       'num_unmon_sites': num_unmon_sites}
 
+        # Performs simple average to get ensemble predictions
         if predictions and ensemble_softmax is not None:
             for softmax in predictions.values():
                 ensemble_softmax += softmax
+            assert ensemble_softmax is not None
             ensemble_softmax = ensemble_softmax / len(predictions)
             if len(predictions) > 1:
                 predictions['ensemble'] = ensemble_softmax
@@ -327,4 +258,5 @@ def main(config):
 if __name__ == '__main__':
     with open('config.json') as config_file:
         config = json.load(config_file)
+
     main(config)
