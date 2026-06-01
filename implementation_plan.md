@@ -1,14 +1,24 @@
-# Implementation Plan - H5 Dataset Builder Pipeline
+# Implementation Plan - H5 Dataset Builder Pipeline (Kaggle Environment Workflow)
 
-Create a new robust CLI script `scripts/build_wfmeta_h5.py` to compile the Website Fingerprinting trace datasets into two scenario-ready HDF5 files:
-1. `wfmeta_closed_world_v1.h5` (Closed-World: only monitored traces, shape N=100000, 100 classes)
+Create a new robust CLI script `scripts/build_wfmeta_h5.py` and parallel Kaggle notebooks to compile the Website Fingerprinting trace datasets into two scenario-ready HDF5 files:
+1. `wfmeta_closed_world_v1.h5` (Closed-World: only monitored traces, shape N=100,000, 100 classes)
 2. `wfmeta_open_world_v1.h5` (Open-World Scenario: merged monitored + unmonitored traces, total = 200,000 traces, where training_data = 133,000, validation_data = 7,000, and test_data = 60,000; 101 classes)
+
+All H5 builds are migrated from Google Colab to **Kaggle** using parallel notebooks to maximize reliability and avoid notebook timeouts.
 
 ---
 
 ## User Review Required
 
 > [!IMPORTANT]
+> **Kaggle Processing Environment**:
+> - Input dataset: `shortonkrediz/wf-raw-splited-v1` mounted at `/kaggle/input/wf-raw-splited-v1/`
+> - Working directory: `/kaggle/working/` (repo cloned at `/kaggle/working/Var-CNN`, temp splits at `/kaggle/working/wf_split`, and output at `/kaggle/working/h5_build/`)
+> - Accelerator: None (CPU Only)
+> - Compiling closed-world and open-world scenario H5 files will be done in parallel using two separate Kaggle notebooks:
+>   - **`01_build_wfmeta_cw.ipynb`**: builds closed-world scenario (output: `wfmeta_closed_world_v1.h5` inside Kaggle Dataset `wfmeta-cw-h5-v1`)
+>   - **`02_build_wfmeta_ow.ipynb`**: builds open-world scenario (output: `wfmeta_open_world_v1.h5` inside Kaggle Dataset `wfmeta-ow-h5-v1`)
+> 
 > **Deterministic Ordering and No Shuffling**: The data splits must follow the existing sorted ordering in the directories (e.g. sorted file paths). Shuffling must NOT be performed during the H5 build phase. Random shuffling during training is handled separately by the Keras `data_generator.py` at runtime.
 > 
 > **ANOVA Ranking Compliance**: The new `wfmeta` dataset (shape `N x 74`) must sort the extracted statistical/WF features according to the exact rank list provided in `wfmeta/wfmeta_anova_ranked_features_v1.json`.

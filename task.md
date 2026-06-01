@@ -28,3 +28,10 @@
   - Generate `h5_schema_report.txt`
   - Generate `label_distribution_report.txt`
   - Generate `wfmeta_order_report.txt`
+- `[x]` Create Kaggle integration files
+  - Create closed-world Notebook: `notebooks/01_build_wfmeta_cw.ipynb`
+  - Create open-world Notebook: `notebooks/02_build_wfmeta_ow.ipynb`
+- `[x]` Document new Kaggle build procedures
+  - Update `implementation_plan.md`
+  - Update `walkthrough.md`
+  - Update `task.md`
