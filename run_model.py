@@ -4,6 +4,7 @@ from __future__ import division
 
 import json
 import os
+import shutil
 
 # --- TAT LOG RAC TENSORFLOW ---
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
@@ -49,7 +50,11 @@ def train_and_val(config, model, callbacks, mixture_num=None, sub_model_name=Non
         weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
 
         if os.path.exists(weights_file):
-            print(f'---> Found existing weights file for {model_id}, resuming training...')
+            print(f'---> Found existing weights file for {model_id}, copying backup and resuming training...')
+            try:
+                shutil.copy(weights_file, weights_file + ".bak")
+            except Exception as e:
+                print(f"[!] Warning: Failed to backup weights: {e}")
             model.load_weights(weights_file)
 
         train_time_start = time.time()
@@ -85,7 +90,11 @@ def train_and_val(config, model, callbacks, mixture_num=None, sub_model_name=Non
         weights_file = os.path.join(weights_dir, f"{model_name}_{sub_model_name}.weights.h5")
         
         if os.path.exists(weights_file):
-            print(f'---> Found existing weights file for {sub_model_name}, resuming training...')
+            print(f'---> Found existing weights file for {sub_model_name}, copying backup and resuming training...')
+            try:
+                shutil.copy(weights_file, weights_file + ".bak")
+            except Exception as e:
+                print(f"[!] Warning: Failed to backup weights: {e}")
             model.load_weights(weights_file)
 
         model.fit(

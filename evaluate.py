@@ -53,7 +53,10 @@ def find_accuracy(model_predictions, conf_thresh, actual_labels,
             if thresh_model_labels[inst_num] == inst_label:
                 multi_class_true_pos += 1
 
-    denominator = num_mon_sites * num_mon_inst_test
+    actual_mon_samples = np.sum(actual_labels_idx < num_mon_sites)
+    actual_unmon_samples = np.sum(actual_labels_idx == num_mon_sites)
+
+    denominator = actual_mon_samples if actual_mon_samples > 0 else (num_mon_sites * num_mon_inst_test)
     if denominator > 0:
         two_class_tpr = two_class_true_pos / denominator * 100
         multi_class_tpr = multi_class_true_pos / denominator * 100
@@ -67,8 +70,9 @@ def find_accuracy(model_predictions, conf_thresh, actual_labels,
     if num_unmon_sites == 0:  # closed-world
         fpr = '0.00%'
     else:
-        if num_unmon_sites_test > 0:
-            fpr = false_pos / num_unmon_sites_test * 100
+        unmon_denominator = actual_unmon_samples if actual_unmon_samples > 0 else num_unmon_sites_test
+        if unmon_denominator > 0:
+            fpr = false_pos / unmon_denominator * 100
         else:
             fpr = 0.0
         fpr = '%.2f' % fpr + '%'
@@ -277,7 +281,7 @@ def main(config):
         ensemble_softmax = None
         for inner_comb in mixture:
             sub_model_name = '_'.join(inner_comb)
-            softmax_file = '%s%s_model.npy' % (predictions_dir, sub_model_name)
+            softmax_file = os.path.join(predictions_dir, f"{sub_model_name}_model.npy")
             if not os.path.exists(softmax_file):
                 print(f"[!] Warning: prediction file {softmax_file} not found.")
                 continue
