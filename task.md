@@ -1,0 +1,30 @@
+# Task Checklist - H5 Dataset Builder Pipeline
+
+- `[x]` Setup script skeleton and argument parser
+  - Parse `--closed-dir`, `--open-dir`, `--ranking-json`, `--output-dir`, `--seq-length`, `--build`
+  - Setup logging and output directory creation
+- `[x]` Implement robust directory scanning & path verification
+  - Scan closed-world files recursively for splits (`training_data`, `validation_data`, `test_data`)
+  - Scan open-world files recursively for splits (`training_data`, `validation_data`, `test_data`)
+  - Deterministically sort paths (e.g. by path string)
+  - Assert expected counts (CW total: 100k, OW total: 100k)
+- `[x]` Load ANOVA Ranking JSON
+  - Load ranking json and extract `feature_order` (74 features)
+- `[x]` Process single CSV trace function
+  - Use `wfmeta/trace_reader.py` to read trace df
+  - Sort by `packet_index` if available
+  - Construct sequences: `dir_seq`, `timestamp`, `time_seq` (IAT clamped >= 0.0), `diat_raw`, `diat_log`, `dir_ts`, `len_seq` (with zero padding or truncation to 5000)
+  - Extract Var-CNN 7-feature `metadata`
+  - Extract 74-feature `wfmeta` and sort by ANOVA ranking
+  - Return sequences, metadata, wfmeta, site_name, trace_name, label
+- `[x]` Implement streaming H5 writer logic
+  - Support closed_world scenario build
+  - Support open_world scenario build (merge CW and OW splits, CW sorted paths first, then OW sorted paths)
+  - Pre-allocate H5 datasets (`float32` for sequences/metadata, `float32` for labels, `h5py.string_dtype()` for names)
+  - Chunk write to files to optimize RAM usage
+- `[x]` Reports & Error logging
+  - Write `failed_traces.csv` for any failed parses
+  - Generate `h5_build_report.txt`
+  - Generate `h5_schema_report.txt`
+  - Generate `label_distribution_report.txt`
+  - Generate `wfmeta_order_report.txt`
