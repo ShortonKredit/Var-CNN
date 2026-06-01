@@ -72,19 +72,19 @@ Output results are published as a new Kaggle Dataset: `wfmeta-cw-h5-v1`.
 
 ---
 
-### Notebook 2: Open-World Build (`02_build_wfmeta_ow.ipynb`)
-This notebook builds the merged Open-World scenario-ready dataset `wfmeta_open_world_v1.h5` (N = 200,000, shape classes = 101).
+### Notebook 2: Open-Only Build (`02_build_wfmeta_oo.ipynb`)
+This notebook builds the open-only dataset `wfmeta_open_only_v1.h5` (N = 100,000, shape classes = 101).
 
 ```bash
 # 1. Setup local working directories
 mkdir -p /kaggle/working/wf_split/closed
 mkdir -p /kaggle/working/wf_split/open
-mkdir -p /kaggle/working/h5_build
+mkdir -p /kaggle/working/h5_build_open_only
 
 # 2. Clone Var-CNN repository from GitHub
 git clone https://github.com/ShortonKredit/Var-CNN.git /kaggle/working/Var-CNN
 
-# 3. Extract Closed-World & Open-World splits
+# 3. Extract Open-World splits (and Closed-world splits for structural compatibility if needed)
 tar -xzf /kaggle/input/wf-raw-splited-v1/closed_world_split.tar.gz -C /kaggle/working/wf_split/closed
 tar -xzf /kaggle/input/wf-raw-splited-v1/open_world_split.tar.gz -C /kaggle/working/wf_split/open
 
@@ -93,28 +93,36 @@ python /kaggle/working/Var-CNN/scripts/build_wfmeta_h5.py \
   --closed-dir /kaggle/working/wf_split/closed \
   --open-dir /kaggle/working/wf_split/open \
   --ranking-json /kaggle/working/Var-CNN/wfmeta/wfmeta_anova_ranked_features_v1.json \
-  --output-dir /kaggle/working/h5_build \
+  --output-dir /kaggle/working/h5_build_open_only \
   --seq-length 5000 \
-  --build open_world
+  --build open_only
 ```
-Output results are published as a new Kaggle Dataset: `wfmeta-ow-h5-v1`.
+Output results are published as a new Kaggle Dataset: `wfmeta-ow-only-h5-v1` (containing `wfmeta_open_only_v1.h5`).
 
 ---
 
 ### 5. Verify Compiled H5 Files Structure (Python Inference Test)
 ```python
 import h5py
+import os
 
-for name in ["wfmeta_closed_world_v1.h5", "wfmeta_open_world_v1.h5"]:
-    h5_path = f"/kaggle/working/h5_build/{name}"
+h5_files = [
+    ("/kaggle/working/h5_build/wfmeta_closed_world_v1.h5", "Closed-World"),
+    ("/kaggle/working/h5_build/wfmeta_open_world_v1.h5", "Open-World"),
+    ("/kaggle/working/h5_build_open_only/wfmeta_open_only_v1.h5", "Open-Only")
+]
+
+for h5_path, label in h5_files:
+    if not os.path.exists(h5_path):
+        continue
     try:
         with h5py.File(h5_path, "r") as f:
-            print(f"\n=== Inspecting {name} ===")
+            print(f"\n=== Inspecting {label} ({os.path.basename(h5_path)}) ===")
             for split in f.keys():
                 print(f"  Split: {split}")
                 for ds in f[split].keys():
                     print(f"    Dataset: {ds} | Shape: {f[split][ds].shape} | Dtype: {f[split][ds].dtype}")
     except Exception as e:
-        print(f"File {name} check skipped or failed: {str(e)}")
+        print(f"File {h5_path} check failed: {str(e)}")
 ```
 

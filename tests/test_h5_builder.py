@@ -72,6 +72,7 @@ def run_test():
         "--seq-length", "10" # use a small sequence length for fast tests
     ]
     
+    # 1. Run main test for closed_world and open_world
     print(f"Running command: {' '.join(cmd)}")
     res = subprocess.run(cmd, capture_output=True, text=True)
     print("STDOUT:")
@@ -81,12 +82,34 @@ def run_test():
     
     assert res.returncode == 0, f"Script failed with return code {res.returncode}"
     
+    # 2. Run test for open_only scenario
+    cmd_open_only = [
+        sys.executable,
+        build_script,
+        "--closed-dir", closed_dir,
+        "--open-dir", open_dir,
+        "--ranking-json", ranking_json_path,
+        "--output-dir", output_dir,
+        "--seq-length", "10",
+        "--build", "open_only"
+    ]
+    print(f"Running command: {' '.join(cmd_open_only)}")
+    res_oo = subprocess.run(cmd_open_only, capture_output=True, text=True)
+    print("STDOUT:")
+    print(res_oo.stdout)
+    print("STDERR:")
+    print(res_oo.stderr)
+    
+    assert res_oo.returncode == 0, f"open_only build failed with return code {res_oo.returncode}"
+    
     # Verify outputs
     closed_h5_file = os.path.join(output_dir, "wfmeta_closed_world_v1.h5")
     open_h5_file = os.path.join(output_dir, "wfmeta_open_world_v1.h5")
+    open_only_h5_file = os.path.join(output_dir, "wfmeta_open_only_v1.h5")
     
     assert os.path.exists(closed_h5_file), f"Missing output file: {closed_h5_file}"
     assert os.path.exists(open_h5_file), f"Missing output file: {open_h5_file}"
+    assert os.path.exists(open_only_h5_file), f"Missing output file: {open_only_h5_file}"
     
     # Verify reports
     reports = [
@@ -146,6 +169,26 @@ def run_test():
         
         assert "test_data" in f
         assert f["test_data/labels"].shape == (2, 101) # 1 CW + 1 OW
+        
+    with h5py.File(open_only_h5_file, "r") as f:
+        # open_only has 101 classes, but only contains open traces
+        # training_data = 1 open trace
+        assert "training_data" in f
+        assert f["training_data/labels"].shape == (1, 101)
+        assert f["training_data/dir_seq"].shape == (1, 10, 1)
+        
+        sites = [s.decode('utf-8') for s in f["training_data/site_name"][:]]
+        assert sites == ["open_world"]
+        
+        labels_onehot = f["training_data/labels"][:]
+        # Open world: class 100
+        assert labels_onehot[0, 100] == 1.0
+        
+        assert "validation_data" in f
+        assert f["validation_data/labels"].shape == (1, 101)
+        
+        assert "test_data" in f
+        assert f["test_data/labels"].shape == (1, 101)
         
     print("\nAll unit tests passed successfully!")
     

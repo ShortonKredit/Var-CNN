@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument(
         "--build",
         nargs="+",
-        choices=["closed_world", "open_world"],
+        choices=["closed_world", "open_world", "open_only"],
         default=["closed_world", "open_world"],
         help="Which scenario H5 files to build (default: both)"
     )
@@ -338,7 +338,7 @@ def build_hdf5_dataset(h5_filepath, split_traces, seq_length, ranking_order, num
             
     return failed_trace_logs
 
-def generate_verification_reports(output_dir, closed_h5, open_h5, elapsed_time, closed_dir, open_dir, ranking_json, seq_length, failed_traces, ranking_order):
+def generate_verification_reports(output_dir, closed_h5, open_h5, open_only_h5, elapsed_time, closed_dir, open_dir, ranking_json, seq_length, failed_traces, ranking_order):
     """
     Generates the four mandatory verification reports in output_dir.
     """
@@ -361,6 +361,8 @@ def generate_verification_reports(output_dir, closed_h5, open_h5, elapsed_time, 
             f.write(f"  - Closed-World H5: {closed_h5} (size: {os.path.getsize(closed_h5)/(1024*1024):.2f} MB)\n")
         if open_h5:
             f.write(f"  - Open-World H5: {open_h5} (size: {os.path.getsize(open_h5)/(1024*1024):.2f} MB)\n")
+        if open_only_h5:
+            f.write(f"  - Open-Only H5: {open_only_h5} (size: {os.path.getsize(open_only_h5)/(1024*1024):.2f} MB)\n")
         f.write("\n")
         
         f.write(f"Success count (total processed): {len(failed_traces) == 0}\n")
@@ -397,6 +399,10 @@ def generate_verification_reports(output_dir, closed_h5, open_h5, elapsed_time, 
         if open_h5:
             f.write(f"File: {os.path.basename(open_h5)}\n")
             f.writelines(get_h5_schema(open_h5))
+            f.write("\n" + "="*40 + "\n\n")
+        if open_only_h5:
+            f.write(f"File: {os.path.basename(open_only_h5)}\n")
+            f.writelines(get_h5_schema(open_only_h5))
             
     # Helper to calculate label counts
     def get_label_distribution(h5_path):
@@ -425,6 +431,10 @@ def generate_verification_reports(output_dir, closed_h5, open_h5, elapsed_time, 
         if open_h5:
             f.write(f"File: {os.path.basename(open_h5)}\n")
             f.writelines(get_label_distribution(open_h5))
+            f.write("\n" + "="*40 + "\n\n")
+        if open_only_h5:
+            f.write(f"File: {os.path.basename(open_only_h5)}\n")
+            f.writelines(get_label_distribution(open_only_h5))
             
     # 4. wfmeta_order_report.txt
     wfmeta_report_path = os.path.join(output_dir, "wfmeta_order_report.txt")
@@ -466,8 +476,14 @@ def main():
     
     # 2. Scan directories
     print("Scanning split directories...")
-    cw_splits = scan_split_directory(args.closed_dir, "closed")
-    ow_splits = scan_split_directory(args.open_dir, "open") if args.open_dir else None
+    
+    cw_splits = None
+    if "closed_world" in args.build or "open_world" in args.build:
+        cw_splits = scan_split_directory(args.closed_dir, "closed")
+        
+    ow_splits = None
+    if "open_world" in args.build or "open_only" in args.build:
+        ow_splits = scan_split_directory(args.open_dir, "open") if args.open_dir else None
     
     # Verify expected counts
     expected_cw = {
@@ -481,30 +497,31 @@ def main():
         "test_data": 50000
     }
     
-    cw_total = sum(len(cw_splits[s]) for s in cw_splits)
-    if cw_total == 0:
-        print("\n" + "!" * 80)
-        print("FATAL ERROR: NO CLOSED-WORLD TRACE CSV FILES FOUND IN THE SPECIFIED DIRECTORIES!")
-        print("!" * 80 + "\n")
-        sys.exit(1)
-        
-    cw_mismatch = False
-    for split_name, expected_count in expected_cw.items():
-        actual_count = len(cw_splits[split_name])
-        if actual_count != expected_count:
-            cw_mismatch = True
-            print(f"WARNING: Closed-World split '{split_name}' count mismatch! Expected: {expected_count}, Actual: {actual_count}")
+    if cw_splits:
+        cw_total = sum(len(cw_splits[s]) for s in cw_splits)
+        if cw_total == 0:
+            print("\n" + "!" * 80)
+            print("FATAL ERROR: NO CLOSED-WORLD TRACE CSV FILES FOUND IN THE SPECIFIED DIRECTORIES!")
+            print("!" * 80 + "\n")
+            sys.exit(1)
             
-    if cw_mismatch:
-        print("\n" + "!" * 80)
-        print("WARNING: CLOSED-WORLD DATASET COUNTS DO NOT MATCH THE EXPECTED SPECIFICATION!")
-        print("Expected counts: Train=85500, Val=4500, Test=10000")
-        print("!" * 80 + "\n")
+        cw_mismatch = False
+        for split_name, expected_count in expected_cw.items():
+            actual_count = len(cw_splits[split_name])
+            if actual_count != expected_count:
+                cw_mismatch = True
+                print(f"WARNING: Closed-World split '{split_name}' count mismatch! Expected: {expected_count}, Actual: {actual_count}")
+                
+        if cw_mismatch:
+            print("\n" + "!" * 80)
+            print("WARNING: CLOSED-WORLD DATASET COUNTS DO NOT MATCH THE EXPECTED SPECIFICATION!")
+            print("Expected counts: Train=85500, Val=4500, Test=10000")
+            print("!" * 80 + "\n")
         
-    if "open_world" in args.build:
+    if "open_world" in args.build or "open_only" in args.build:
         if not ow_splits:
             print("\n" + "!" * 80)
-            print("FATAL ERROR: OPEN-WORLD DIRECTORY MUST BE SPECIFIED FOR open_world BUILD!")
+            print("FATAL ERROR: OPEN-WORLD DIRECTORY MUST BE SPECIFIED FOR open_world OR open_only BUILD!")
             print("!" * 80 + "\n")
             sys.exit(1)
             
@@ -531,6 +548,7 @@ def main():
     failed_traces = []
     closed_h5_path = None
     open_h5_path = None
+    open_only_h5_path = None
     
     # 3. Build Closed-World scenarios
     if "closed_world" in args.build:
@@ -581,7 +599,29 @@ def main():
         )
         failed_traces.extend(ow_failed)
         
-    # 5. Done, generate reports
+    # 5. Build Open-Only scenarios
+    if "open_only" in args.build:
+        if not args.open_dir:
+            print("Error: --open-dir is required to build the open_only scenario.")
+            sys.exit(1)
+            
+        open_only_h5_path = os.path.join(args.output_dir, "wfmeta_open_only_v1.h5")
+        print("======================================================================")
+        print(f"BUILDING OPEN-ONLY scenario H5 file: {open_only_h5_path}")
+        print("======================================================================")
+        
+        # Open-only has 101 classes, but only contains the open world splits
+        ow_failed = build_hdf5_dataset(
+            h5_filepath=open_only_h5_path,
+            split_traces=ow_splits,
+            seq_length=args.seq_length,
+            ranking_order=ranking_order,
+            num_classes=101,
+            compress=args.compress
+        )
+        failed_traces.extend(ow_failed)
+        
+    # 6. Done, generate reports
     elapsed_time = time.time() - start_time
     print("======================================================================")
     print(f"Completed H5 Build in {elapsed_time/60:.2f}m ({elapsed_time:.1f}s)")
@@ -591,6 +631,7 @@ def main():
         output_dir=args.output_dir,
         closed_h5=closed_h5_path,
         open_h5=open_h5_path,
+        open_only_h5=open_only_h5_path,
         elapsed_time=elapsed_time,
         closed_dir=args.closed_dir,
         open_dir=args.open_dir,
