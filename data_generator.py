@@ -123,15 +123,15 @@ def generate(config, data_type, mixture_num=None):
         num_samples = len(labels_ds)
         indices = np.arange(num_samples)
         
-        # Shuffle indices for training/validation (not for test_data)
-        if data_type != 'test_data':
+        # Shuffle indices for training_data (not for validation_data or test_data)
+        if data_type == 'training_data':
             np.random.shuffle(indices)
 
         batch_start = 0
         while True:
             if batch_start >= num_samples:
                 batch_start = 0
-                if data_type != 'test_data':
+                if data_type == 'training_data':
                     np.random.shuffle(indices)
 
             batch_indices = indices[batch_start:batch_start + batch_size]

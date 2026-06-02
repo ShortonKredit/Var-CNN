@@ -85,14 +85,15 @@ def train_and_val(config, model, callbacks, mixture_num=None, sub_model_name=Non
             pass
         model.load_weights(weights_file)
 
-    # Note: callbacks already contains ModelCheckpoint from get_model
-    # We also append ModelCheckpoint as in the original code for root save
-    from tensorflow.keras.callbacks import ModelCheckpoint
-    checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy', verbose=1,
-                                 save_best_only=True, mode='max', save_weights_only=True)
-    if 'callbacks' not in locals() or callbacks is None:
+    if callbacks is None:
         callbacks = []
-    callbacks.append(checkpoint)
+    # Avoid duplicate ModelCheckpoint callback
+    from tensorflow.keras.callbacks import ModelCheckpoint
+    has_checkpoint = any(isinstance(c, ModelCheckpoint) for c in callbacks)
+    if not has_checkpoint:
+        checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy', verbose=1,
+                                     save_best_only=True, mode='max', save_weights_only=True)
+        callbacks.append(checkpoint)
 
     train_time_start = time.time()
     model.fit(
