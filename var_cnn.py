@@ -390,8 +390,9 @@ def get_model(config, mixture_num=None, sub_model_name=None):
     lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
                                    cooldown=0, patience=base_patience,
                                    min_lr=1e-5, verbose=1)
+    es_multiplier = config.get("early_stopping_multiplier", 2)
     early_stopping = EarlyStopping(monitor='val_accuracy',
-                                   patience=2 * base_patience)
+                                   patience=es_multiplier * base_patience)
     model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
                                        save_best_only=True,
                                        save_weights_only=True, verbose=1)
