@@ -13,7 +13,6 @@
     "df_epochs": 10,
     "var_cnn_max_epochs": 150,
     "var_cnn_base_patience": 5,
-    "early_stopping_multiplier": 3,
     "dir_dilations": true,
     "time_dilations": true,
     "output_dir": "/kaggle/working/outputs/",
