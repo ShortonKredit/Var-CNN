@@ -283,7 +283,7 @@ def get_model(config, mixture_num=None, sub_model_name=None):
             
         if use_metadata:
             meta_dim = 7
-            if metadata_type == 'wfmeta10':
+            if metadata_type and metadata_type.startswith('wfmeta'):
                 meta_dim = wfmeta_k
             metadata_input = Input(shape=(meta_dim,), name='metadata_input')
             metadata_output = Dense(32)(metadata_input)

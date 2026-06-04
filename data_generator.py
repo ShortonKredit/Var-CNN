@@ -147,7 +147,7 @@ def generate(config, data_type, mixture_num=None):
             # Load metadata batch
             if meta_ds is not None:
                 meta_batch = safe_h5_read(meta_ds, batch_indices)
-                if meta_type == "wfmeta10" or meta_ds_name == "wfmeta":
+                if (meta_type and meta_type.startswith("wfmeta")) or meta_ds_name == "wfmeta":
                     # Extract top-k ANOVA features (defaults to 10)
                     meta_batch = meta_batch[:, :wfmeta_k]
                 inputs['metadata_input'] = meta_batch.astype(np.float32)

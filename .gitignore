@@ -32,3 +32,13 @@ config_backup.json
 # OS rác
 .DS_Store
 Thumbs.db
+
+@'
+
+# Thêm cấu hình chặn dữ liệu mới và file tạm (Var-CNN)
+0_123movies.is_0.csv
+backup/
+wtfpad_df/
+scratch/outputs/
+scratch/temp_config.json
+'@ | Out-File -FilePath .gitignore -Encoding utf8 -Append

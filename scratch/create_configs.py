@@ -1,10 +1,40 @@
 import json
 import os
+import shutil
 
-configs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
-os.makedirs(configs_dir, exist_ok=True)
+# 1. Define paths on Kaggle
+SMALL_H5_PATH = "/kaggle/input/datasets/shortonkrediz/wfmeta-open-world-small-h5/wfmeta_open_world_small.h5"
+WTFPAD_H5_PATH = "/kaggle/input/datasets/shortonkrediz/wfmeta-open-world-wtfpad-h5/wfmeta_open_world_wtfpad.h5"
 
-# 1. Define sequence streams mapping
+# 2. Get directory paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_dir = os.path.dirname(current_dir)
+configs_dir = os.path.join(project_dir, "configs")
+full_dir = os.path.join(configs_dir, "full")
+
+# Clean existing small and wtfpad directories if they exist, but DO NOT delete configs/ root or configs/full/
+small_dir = os.path.join(configs_dir, "small")
+wtfpad_dir = os.path.join(configs_dir, "wtfpad")
+
+if os.path.exists(small_dir):
+    shutil.rmtree(small_dir)
+if os.path.exists(wtfpad_dir):
+    shutil.rmtree(wtfpad_dir)
+
+# Clean full_dir if it exists, to avoid duplicates when re-running
+if os.path.exists(full_dir):
+    shutil.rmtree(full_dir)
+os.makedirs(full_dir, exist_ok=True)
+
+# 3. Move old config files from configs/ root to configs/full/
+for item in os.listdir(configs_dir):
+    item_path = os.path.join(configs_dir, item)
+    # Only move files, not directories (like small, wtfpad)
+    if os.path.isfile(item_path) and item.endswith(".json"):
+        shutil.move(item_path, os.path.join(full_dir, item))
+        print(f"Moved old config: {item} -> configs/full/")
+
+# 4. Define sequence streams mapping (excluding 'len')
 sequences = {
     "dir": {
         "sequence_dataset": "dir_seq",
@@ -16,20 +46,15 @@ sequences = {
         "sequence_input_name": "time_input",
         "sequence_model_suffix": "time"
     },
-    "len": {
-        "sequence_dataset": "len_seq",
-        "sequence_input_name": "len_input",
-        "sequence_model_suffix": "len"
+    "diat_raw": {
+        "sequence_dataset": "diat_raw",
+        "sequence_input_name": "diat_raw_input",
+        "sequence_model_suffix": "diat_raw"
     },
     "diat_log": {
         "sequence_dataset": "diat_log",
         "sequence_input_name": "diat_log_input",
         "sequence_model_suffix": "diat_log"
-    },
-    "diat_raw": {
-        "sequence_dataset": "diat_raw",
-        "sequence_input_name": "diat_raw_input",
-        "sequence_model_suffix": "diat_raw"
     },
     "dir_ts": {
         "sequence_dataset": "dir_ts",
@@ -38,7 +63,7 @@ sequences = {
     }
 }
 
-# 2. Define metadata streams mapping
+# 5. Define metadata streams mapping
 metadatas = {
     "metadata": {
         "metadata_dataset": "metadata",
@@ -49,76 +74,80 @@ metadatas = {
         "metadata_dataset": "wfmeta",
         "metadata_type": "wfmeta10",
         "wfmeta_k": 10
+    },
+    "wfmeta20": {
+        "metadata_dataset": "wfmeta",
+        "metadata_type": "wfmeta20",
+        "wfmeta_k": 20
     }
 }
 
-# 3. Base config template
-base_config = {
-    "scenario": "closed_world",
-    "processed_h5": "/kaggle/input/datasets/shortonkrediz/wfmeta-closed-world-h5-v1/wfmeta_closed_world_v1.h5",
-    "num_classes": 100,
-    "num_mon_sites": 100,
-    "num_mon_inst_train": 855,
-    "num_mon_inst_test": 100,
-    "num_unmon_sites_train": 0,
-    "num_unmon_sites_test": 0,
-    "batch_size": 256,
-    "seq_length": 5000,
-    "model_name": "var-cnn",
-    "df_epochs": 10,
-    "var_cnn_max_epochs": 150,
-    "var_cnn_base_patience": 5,
-    "dir_dilations": True,
-    "time_dilations": True,
-    "output_dir": "/kaggle/working/outputs/"
-}
-
-# Base config template for Open World
-base_config_ow = {
+# 6. Base config templates for Open World (forcing 50 epochs and correct instance counts)
+base_config_small = {
     "scenario": "open_world",
-    "processed_h5": "/kaggle/input/datasets/shortonkrediz/wfmeta-open-world-h5-v2/wfmeta_open_world_v2.h5",
+    "processed_h5": SMALL_H5_PATH,
     "num_classes": 101,
     "num_mon_sites": 100,
-    "num_mon_inst_train": 855,
-    "num_mon_inst_test": 100,
-    "num_unmon_sites_train": 47500,
-    "num_unmon_sites_test": 50000,
+    "num_mon_inst_train": 170,       # Corrected: 170 training monitored traces per site
+    "num_mon_inst_test": 20,         # Corrected: 20 test monitored traces per site
+    "num_unmon_sites_train": 9500,   # Corrected: 9500 training unmonitored traces
+    "num_unmon_sites_test": 10000,   # Corrected: 10000 test unmonitored traces
     "batch_size": 256,
     "seq_length": 5000,
     "model_name": "var-cnn",
     "df_epochs": 10,
-    "var_cnn_max_epochs": 150,
+    "var_cnn_max_epochs": 50,  # Forced to 50 epochs max
     "var_cnn_base_patience": 5,
     "dir_dilations": True,
     "time_dilations": True,
     "output_dir": "/kaggle/working/outputs/"
 }
 
-# 4. Generate the 12 config files for CW and 12 for OW
+base_config_wtfpad = base_config_small.copy()
+base_config_wtfpad["processed_h5"] = WTFPAD_H5_PATH
+
+# 7. Generate configs for Small dataset
 for seq_name, seq_info in sequences.items():
     for meta_name, meta_info in metadatas.items():
-        # --- Closed World ---
-        cw_model_id = f"cw_{seq_name}_{meta_name}"
-        cw_config = base_config.copy()
-        cw_config["model_id"] = cw_model_id
-        cw_config.update(seq_info)
-        cw_config.update(meta_info)
+        model_id = f"ow_small_{seq_name}_{meta_name}"
+        config = base_config_small.copy()
+        config["model_id"] = model_id
+        config.update(seq_info)
+        config.update(meta_info)
         
-        cw_path = os.path.join(configs_dir, f"{cw_model_id}.json")
-        with open(cw_path, "w", encoding="utf-8") as f:
-            json.dump(cw_config, f, indent=4)
-        print(f"Generated CW config: {cw_path}")
+        # Save to configs/small/<metadata_type>/
+        target_dir = os.path.join(small_dir, meta_name)
+        os.makedirs(target_dir, exist_ok=True)
         
-        # --- Open World ---
-        ow_model_id = f"ow_{seq_name}_{meta_name}"
-        ow_config = base_config_ow.copy()
-        ow_config["model_id"] = ow_model_id
-        ow_config.update(seq_info)
-        ow_config.update(meta_info)
-        
-        ow_path = os.path.join(configs_dir, f"{ow_model_id}.json")
-        with open(ow_path, "w", encoding="utf-8") as f:
-            json.dump(ow_config, f, indent=4)
-        print(f"Generated OW config: {ow_path}")
+        filepath = os.path.join(target_dir, f"{model_id}.json")
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
+        print(f"Generated Raw Small Config: {filepath}")
 
-print("\nAll configurations generated successfully in 'configs/' directory.")
+# 8. Generate configs for WTF-PAD dataset
+for seq_name, seq_info in sequences.items():
+    for meta_name, meta_info in metadatas.items():
+        model_id = f"ow_wtfpad_{seq_name}_{meta_name}"
+        config = base_config_wtfpad.copy()
+        config["model_id"] = model_id
+        config.update(seq_info)
+        config.update(meta_info)
+        
+        # Determine target folder name for wtfpad
+        if meta_name == "wfmeta20":
+            if seq_name in ["dir", "time", "diat_raw"]:
+                folder_name = "wfmeta20_part1"
+            else:
+                folder_name = "wfmeta20_part2"
+        else:
+            folder_name = meta_name
+            
+        target_dir = os.path.join(wtfpad_dir, folder_name)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        filepath = os.path.join(target_dir, f"{model_id}.json")
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
+        print(f"Generated WTF-PAD Config: {filepath}")
+
+print("\nConfigs successfully generated and structured for 6+1 Notebooks!")
