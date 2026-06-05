@@ -22,8 +22,7 @@ if os.path.exists(wtfpad_dir):
     shutil.rmtree(wtfpad_dir)
 
 # Clean full_dir if it exists, to avoid duplicates when re-running
-if os.path.exists(full_dir):
-    shutil.rmtree(full_dir)
+# (Keep fullconfigs safe on rerun, only create if missing)
 os.makedirs(full_dir, exist_ok=True)
 
 # 3. Move old config files from configs/ root to configs/full/
@@ -82,7 +81,7 @@ metadatas = {
     }
 }
 
-# 6. Base config templates for Open World (forcing 50 epochs and correct instance counts)
+# 6. Base config templates for Open World (correct instance counts)
 base_config_small = {
     "scenario": "open_world",
     "processed_h5": SMALL_H5_PATH,
@@ -96,7 +95,7 @@ base_config_small = {
     "seq_length": 5000,
     "model_name": "var-cnn",
     "df_epochs": 10,
-    "var_cnn_max_epochs": 50,  # Forced to 50 epochs max
+    "var_cnn_max_epochs": 50,  # Default, will be updated dynamically
     "var_cnn_base_patience": 5,
     "dir_dilations": True,
     "time_dilations": True,
@@ -115,6 +114,12 @@ for seq_name, seq_info in sequences.items():
         config.update(seq_info)
         config.update(meta_info)
         
+        # Set max epochs dynamically: wfmeta10 and wfmeta20 get 150 epochs, metadata gets 50
+        if meta_name in ["wfmeta10", "wfmeta20"]:
+            config["var_cnn_max_epochs"] = 150
+        else:
+            config["var_cnn_max_epochs"] = 50
+            
         # Save to configs/small/<metadata_type>/
         target_dir = os.path.join(small_dir, meta_name)
         os.makedirs(target_dir, exist_ok=True)
@@ -133,6 +138,12 @@ for seq_name, seq_info in sequences.items():
         config.update(seq_info)
         config.update(meta_info)
         
+        # Set max epochs dynamically: wfmeta10 and wfmeta20 get 150 epochs, metadata gets 50
+        if meta_name in ["wfmeta10", "wfmeta20"]:
+            config["var_cnn_max_epochs"] = 150
+        else:
+            config["var_cnn_max_epochs"] = 50
+            
         # Determine target folder name for wtfpad
         if meta_name == "wfmeta20":
             if seq_name in ["dir", "time", "diat_raw"]:
