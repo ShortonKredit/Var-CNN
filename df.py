@@ -25,8 +25,9 @@ def get_model(config):
     num_unmon_sites = num_unmon_sites_test + num_unmon_sites_train
 
     seq_length = config['seq_length']
+    seq_input_name = config.get("sequence_input_name", "dir_input")
 
-    dir_input = Input(shape=(seq_length, 1,), name='dir_input')
+    dir_input = Input(shape=(seq_length, 1,), name=seq_input_name)
 
     # Block 1
     x = Conv1D(32, 8, strides=1, padding='same')(dir_input)
@@ -80,7 +81,7 @@ def get_model(config):
     x = Dropout(0.5)(x)
 
     # Add final softmax layer
-    output_classes = num_mon_sites if num_unmon_sites == 0 else num_mon_sites + 1
+    output_classes = config.get("num_classes", num_mon_sites if num_unmon_sites == 0 else num_mon_sites + 1)
     model_output = Dense(units=output_classes, activation='softmax',
                          name='model_output')(x)
 
@@ -89,5 +90,29 @@ def get_model(config):
                   optimizer=Adamax(0.002),
                   metrics=['accuracy'])
 
-    callbacks = []
+    import os
+    import numpy as np
+    from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
+    
+    model_id = config.get("model_id", "df_model")
+    output_dir = config.get("output_dir", "/kaggle/working/outputs")
+    if not output_dir.endswith(model_id):
+        target_dir = os.path.join(output_dir, model_id)
+    else:
+        target_dir = output_dir
+    os.makedirs(target_dir, exist_ok=True)
+    weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
+
+    base_patience = config.get("df_base_patience", 5)
+    
+    lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
+                                   cooldown=0, patience=base_patience,
+                                   min_lr=1e-5, verbose=1)
+    early_stopping = EarlyStopping(monitor='val_accuracy',
+                                   patience=2 * base_patience)
+    model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
+                                       save_best_only=True,
+                                       save_weights_only=True, verbose=1)
+    
+    callbacks = [lr_reducer, early_stopping, model_checkpoint]
     return model, callbacks

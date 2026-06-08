@@ -1,0 +1,19 @@
+{
+    "model_name": "df",
+    "model_id": "df_cw_dir",
+    "scenario": "closed_world",
+    "processed_h5": "/kaggle/input/datasets/shortonkrediz/wfmeta-closed-world-h5-v1/wfmeta_closed_world_v1.h5",
+    "sequence_dataset": "dir_seq",
+    "sequence_input_name": "dir_input",
+    "num_classes": 100,
+    "num_mon_sites": 100,
+    "num_mon_inst_train": 855,
+    "num_mon_inst_test": 100,
+    "num_unmon_sites_train": 0,
+    "num_unmon_sites_test": 0,
+    "batch_size": 256,
+    "seq_length": 5000,
+    "df_epochs": 150,
+    "df_base_patience": 5,
+    "output_dir": "/kaggle/working/outputs/"
+}
