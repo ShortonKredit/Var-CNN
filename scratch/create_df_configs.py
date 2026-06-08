@@ -79,7 +79,7 @@ for ds_name, ds_info in datasets.items():
             "num_unmon_sites_test": ds_info["num_unmon_sites_test"],
             "batch_size": 256,
             "seq_length": 5000,
-            "df_epochs": 150,
+            "df_epochs": 30,
             "df_base_patience": 5,
             "output_dir": "/kaggle/working/outputs/"
         }
