@@ -91,8 +91,7 @@ def get_model(config):
                   metrics=['accuracy'])
 
     import os
-    import numpy as np
-    from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
+    from tensorflow.keras.callbacks import ModelCheckpoint
     
     model_id = config.get("model_id", "df_model")
     output_dir = config.get("output_dir", "/kaggle/working/outputs")
@@ -103,16 +102,9 @@ def get_model(config):
     os.makedirs(target_dir, exist_ok=True)
     weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
 
-    base_patience = config.get("df_base_patience", 5)
-    
-    lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
-                                   cooldown=0, patience=base_patience,
-                                   min_lr=1e-5, verbose=1)
-    early_stopping = EarlyStopping(monitor='val_accuracy',
-                                   patience=2 * base_patience)
     model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
                                        save_best_only=True,
                                        save_weights_only=True, verbose=1)
     
-    callbacks = [lr_reducer, early_stopping, model_checkpoint]
+    callbacks = [model_checkpoint]
     return model, callbacks
