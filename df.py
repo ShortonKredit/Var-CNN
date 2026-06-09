@@ -90,21 +90,5 @@ def get_model(config):
                   optimizer=Adamax(0.002),
                   metrics=['accuracy'])
 
-    import os
-    from tensorflow.keras.callbacks import ModelCheckpoint
-    
-    model_id = config.get("model_id", "df_model")
-    output_dir = config.get("output_dir", "/kaggle/working/outputs")
-    if not output_dir.endswith(model_id):
-        target_dir = os.path.join(output_dir, model_id)
-    else:
-        target_dir = output_dir
-    os.makedirs(target_dir, exist_ok=True)
-    weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
-
-    model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
-                                       save_best_only=True,
-                                       save_weights_only=True, verbose=1)
-    
-    callbacks = [model_checkpoint]
+    callbacks = []
     return model, callbacks

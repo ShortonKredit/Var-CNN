@@ -58,14 +58,6 @@ def train_and_val(config, model, callbacks):
     if callbacks is None:
         callbacks = []
 
-    # Ensure ModelCheckpoint callback is present
-    from tensorflow.keras.callbacks import ModelCheckpoint
-    has_checkpoint = any(isinstance(c, ModelCheckpoint) for c in callbacks)
-    if not has_checkpoint:
-        checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy', verbose=1,
-                                     save_best_only=True, mode='max', save_weights_only=True)
-        callbacks.append(checkpoint)
-
     train_time_start = time.time()
     model.fit(
         data_generator.generate(config, 'training_data'),
@@ -80,6 +72,11 @@ def train_and_val(config, model, callbacks):
     train_time_end = time.time()
 
     print('Total training time: %f seconds' % (train_time_end - train_time_start))
+
+    # Save final epoch weights
+    os.makedirs(target_dir, exist_ok=True)
+    model.save_weights(weights_file)
+    print(f"Saved final epoch weights to {weights_file}")
 
 
 def predict(config, model):

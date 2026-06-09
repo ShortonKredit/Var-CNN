@@ -36,7 +36,7 @@ def test_config_build(config_path, expected_classes):
     
     # Check callbacks
     print(f"  Number of callbacks generated: {len(callbacks)}")
-    assert len(callbacks) > 0, "No callbacks generated!"
+    assert len(callbacks) == 0, f"Expected 0 callbacks, got {len(callbacks)}"
     
     # Mock inference to verify compilation and layer math
     mock_input = np.random.randint(0, 2, size=(2, config["seq_length"], 1)).astype(np.float32)
