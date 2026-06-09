@@ -57,6 +57,10 @@ reps = {
     "draw": {
         "sequence_dataset": "diat_raw",
         "sequence_input_name": "diat_raw_input"
+    },
+    "dts": {
+        "sequence_dataset": "dir_ts",
+        "sequence_input_name": "dir_ts_input"
     }
 }
 
@@ -90,4 +94,4 @@ for ds_name, ds_info in datasets.items():
             json.dump(config, f, indent=4)
         print(f"Generated config file: {config_path}")
 
-print("All 12 configurations generated successfully.")
+print("All 16 configurations generated successfully.")

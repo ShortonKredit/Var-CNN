@@ -1,0 +1,19 @@
+{
+    "model_name": "df",
+    "model_id": "df_ow_dts",
+    "scenario": "open_world",
+    "processed_h5": "/kaggle/input/datasets/shortonkrediz/wfmeta-open-world-h5-v2/wfmeta_open_world_v2.h5",
+    "sequence_dataset": "dir_ts",
+    "sequence_input_name": "dir_ts_input",
+    "num_classes": 101,
+    "num_mon_sites": 100,
+    "num_mon_inst_train": 855,
+    "num_mon_inst_test": 100,
+    "num_unmon_sites_train": 47500,
+    "num_unmon_sites_test": 50000,
+    "batch_size": 256,
+    "seq_length": 5000,
+    "df_epochs": 30,
+    "df_base_patience": 5,
+    "output_dir": "/kaggle/working/outputs/"
+}
