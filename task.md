@@ -2,8 +2,8 @@
 
 - `[x]` Deterministic Index Generation (`create_lowdata_indices.py`)
   - Deterministically shuffle class indices per class once with RandomState seed 42.
-  - Slices training indices: `cw100` (10,000), `cw300` (30,000), `cw550` (55,000).
-  - Verify uniqueness, min/max bounds, and nested inclusion (`cw100 ⊂ cw300 ⊂ cw550`).
+  - Slices training indices: `cw60` (6,000), `cw80` (8,000), `cw100` (10,000), `cw300` (30,000), `cw550` (55,000).
+  - Verify uniqueness, min/max bounds, and nested inclusion (`cw60 ⊂ cw80 ⊂ cw100 ⊂ cw300 ⊂ cw550`).
   - Calculate SHA256 checksums and save to `lowdata_indices/`.
 - `[x]` Safe H5 Read Logic (`data_generator.py`)
   - Implement sorted index H5 queries to comply with h5py constraints, restoring original order after reading.
@@ -12,11 +12,13 @@
 - `[x]` Training Pipeline Step Adjustment (`run_model.py`)
   - Adjust `train_size` and `steps_per_epoch` based on active subset size when `train_indices_file` exists.
 - `[x]` Low-Data Configs Creation (`create_lowdata_configs.py`)
-  - Generate 18 configurations inside `configs/lowdata/` for $k \in \{100, 300, 550\}$.
+  - Generate 30 configurations inside `configs/lowdata/` for $k \in \{60, 80, 100, 300, 550\}$.
   - Keep `wfmeta10` dataset/metadata mapping with `wfmeta_k = 10` and baseline `metadata` mapping with `wfmeta_k = 7`.
+  - Apply new epoch rules: 50 epochs for metadata models, 150 epochs for wfmeta10 models.
 - `[x]` Softmax Ensemble Evaluation (`evaluate_lowdata_ensembles.py`)
   - Average softmax predictions for Var-CNN, WFMeta-DT, WFMeta-DTL, WFMeta-DIAT-L.
   - Enforce prediction shape verification `(10000, 100)` and FileNotFoundError exceptions on missing files.
+  - Support levels 60, 80, 100, 300, and 550.
 - `[x]` Validation & Deployment
   - Run full integration test (`scratch/test_lowdata_pipeline.py`) simulating pipeline on mock data.
   - Commit all files and push to remote repository.
