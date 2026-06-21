@@ -6,7 +6,7 @@ import h5py
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate low-data Closed-World ensembles using softmax averaging.")
-    parser.add_argument("--k", type=int, required=True, choices=[100, 300, 550], help="Training traces per site (100, 300, 550).")
+    parser.add_argument("--k", type=int, required=True, choices=[60, 80, 100, 300, 550], help="Training traces per site (60, 80, 100, 300, 550).")
     parser.add_argument("--only", type=str, default=None, help="Comma-separated list of ensemble methods to evaluate (e.g. 'varcnn' or 'wfmeta_dt,wfmeta_dtl').")
     parser.add_argument("--outputs_dir", type=str, default="/kaggle/working/outputs/", help="Directory where model outputs are stored.")
     parser.add_argument("--h5_path", type=str, default="/kaggle/input/datasets/shortonkrediz/wfmeta-closed-world-h5-v1/wfmeta_closed_world_v1.h5", help="Path to closed-world H5 dataset.")

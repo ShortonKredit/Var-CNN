@@ -16,13 +16,13 @@
     "dir_dilations": true,
     "time_dilations": true,
     "output_dir": "/kaggle/working/outputs/",
-    "model_id": "cw550_time_metadata",
-    "sequence_dataset": "time_seq",
-    "sequence_input_name": "time_input",
-    "sequence_model_suffix": "time",
+    "model_id": "cw60_dir_metadata",
+    "sequence_dataset": "dir_seq",
+    "sequence_input_name": "dir_input",
+    "sequence_model_suffix": "dir",
     "metadata_dataset": "metadata",
     "metadata_type": "metadata",
     "wfmeta_k": 7,
-    "train_traces_per_site": 550,
-    "train_indices_file": "lowdata_indices/cw550_train_indices.npy"
+    "train_traces_per_site": 60,
+    "train_indices_file": "lowdata_indices/cw60_train_indices.npy"
 }
