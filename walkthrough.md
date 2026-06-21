@@ -1,128 +1,58 @@
 # Walkthrough - H5 Dataset Builder Pipeline
 
-This document details the newly added H5 dataset builder pipeline, local unit test validation results, and execution guides on Google Colab.
+This document details the dataset building pipeline, Keras 3 compatibility minimal patch, Deep Fingerprinting baseline integration, and Closed-World low-data evaluation integration.
 
 ---
 
-## Changes Made
+## 1. H5 Dataset Builder Pipeline
 
-### 1. New Dataset Builder CLI Script
-- Created [build_wfmeta_h5.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scripts/build_wfmeta_h5.py):
-  - Support for scanning raw split directories recursively.
-  - Semicolon separator handling via project `trace_reader.py`.
-  - Dense sequences calculation (`dir_seq`, `timestamp`, `time_seq` as clamped relative IAT, `diat_raw`, `diat_log`, `dir_ts`, `len_seq`) zero-padded or truncated to 5000.
-  - Var-CNN original 7-feature `metadata` extraction on the whole raw trace.
-  - ANOVA-ranked 74-feature `wfmeta` extraction mapped using the rank order list from JSON.
-  - Memory-efficient HDF5 streaming writes with resize support for skipping files cleanly if errors occur.
-  - Full logging of failures in `failed_traces.csv`.
-  - Compilation of build schema, label distribution, and ranked order verification report files.
+The H5 dataset builder pipeline includes scan parsing, IAT calculations, feature extraction, and parallelized compilation.
 
-### 2. Unit Testing Suite
-- Created [test_h5_builder.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/tests/test_h5_builder.py):
-  - Generates dummy closed-world and open-world splits.
-  - Traces processing and streaming H5 compilation test.
-  - Group and dataset structure check, label alignment verify, report outputs checking.
+### Changes Made
+- Created [build_wfmeta_h5.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scripts/build_wfmeta_h5.py) supporting directory recursive scans, semicolon separators, relative clamp IAT, ANOVA feature indexing, and resize support.
+- Created [test_h5_builder.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/tests/test_h5_builder.py) unit testing suite.
 
 ---
 
-## Validation Results
+## 2. Keras 3 Compatibility Minimal Patch
 
-Running `python tests/test_h5_builder.py` produced:
-- Successful compilation with code `0`.
-- Outputs generated: `wfmeta_closed_world_v1.h5` and `wfmeta_open_world_v1.h5`.
-- Dense and correctly sized datasets verified (Closed shape N=2, Open shape N=3, labels classes 100 and 101 respectively).
-- Reports: `h5_build_report.txt`, `h5_schema_report.txt`, `label_distribution_report.txt`, and `wfmeta_order_report.txt` correctly populated.
-
----
-
-## Kaggle Environment Commands Guide
-
-The full H5 build is migrated to **Kaggle** to execute splits in parallel and bypass timeout/memory limitations.
-
-### Input Dataset
-Mounted at `/kaggle/input/wf-raw-splited-v1/` containing:
-- `closed_world_split.tar.gz`
-- `open_world_split.tar.gz`
+Minimal changes were made to resolve compilation errors under Keras 3:
+- Preserved generator pattern by removing custom wrappers.
+- Selective shuffling for training data, validation/test left sequential.
+- Weights Isolated to distinct directories under `/kaggle/working/outputs/<model_id>/`.
+- Overwrite protection backing up old weights to `.bak`.
 
 ---
 
-### Notebook 1: Closed-World Build (`01_build_wfmeta_cw.ipynb`)
-This notebook builds the Closed-World dataset `wfmeta_closed_world_v1.h5` (N = 100,000, shape classes = 100).
+## 3. Deep Fingerprinting (DF) Baseline Integration
 
-```bash
-# 1. Setup local working directories
-mkdir -p /kaggle/working/wf_split/closed
-mkdir -p /kaggle/working/h5_build
-
-# 2. Clone Var-CNN repository from GitHub
-git clone https://github.com/ShortonKredit/Var-CNN.git /kaggle/working/Var-CNN
-
-# 3. Extract Closed-World splits
-tar -xzf /kaggle/input/wf-raw-splited-v1/closed_world_split.tar.gz -C /kaggle/working/wf_split/closed
-
-# 4. Run builder script (Accelerator = None)
-python /kaggle/working/Var-CNN/scripts/build_wfmeta_h5.py \
-  --closed-dir /kaggle/working/wf_split/closed \
-  --ranking-json /kaggle/working/Var-CNN/wfmeta/wfmeta_anova_ranked_features_v1.json \
-  --output-dir /kaggle/working/h5_build \
-  --seq-length 5000 \
-  --build closed_world
-```
-Output results are published as a new Kaggle Dataset: `wfmeta-cw-h5-v1`.
+Integrated the DF baseline architecture while keeping Var-CNN intact:
+- Created [run_dfmodel.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/run_dfmodel.py) dedicated model runner.
+- Created [scratch/create_df_configs.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scratch/create_df_configs.py) baseline configuration generator.
+- Added 16 JSON configurations inside `configs/df/`.
 
 ---
 
-### Notebook 2: Open-Only Build (`02_build_wfmeta_oo.ipynb`)
-This notebook builds the open-only dataset `wfmeta_open_only_v1.h5` (N = 100,000, shape classes = 101).
+## 4. Closed-World Low-Data Evaluation Integration ($k \in \{100, 300, 550\}$)
 
-```bash
-# 1. Setup local working directories
-mkdir -p /kaggle/working/wf_split/closed
-mkdir -p /kaggle/working/wf_split/open
-mkdir -p /kaggle/working/h5_build_open_only
+We integrated the Closed-World low-data website fingerprinting evaluation pipeline.
 
-# 2. Clone Var-CNN repository from GitHub
-git clone https://github.com/ShortonKredit/Var-CNN.git /kaggle/working/Var-CNN
+### Created Files
+* **[scratch/create_lowdata_indices.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scratch/create_lowdata_indices.py)**: Generates deterministic nested subset indices (`cw100 ⊂ cw300 ⊂ cw550`) by shuffling training indices per class once using a RandomState with seed 42.
+* **[scratch/evaluate_lowdata_ensembles.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scratch/evaluate_lowdata_ensembles.py)**: Performs softmax prediction averaging for constituent models in ensembles (Var-CNN, WFMeta-DT, WFMeta-DTL, WFMeta-DIAT-L), verifies output shapes of `(10000, 100)`, and raises a `FileNotFoundError` if files are missing.
+* **[scratch/create_lowdata_configs.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scratch/create_lowdata_configs.py)**: Config generator script to write the 18 JSON configurations in `configs/lowdata/`.
+* **[scratch/test_lowdata_pipeline.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/scratch/test_lowdata_pipeline.py)**: Test runner script simulating a complete training and evaluation run on a local dummy dataset.
 
-# 3. Extract Open-World splits (and Closed-world splits for structural compatibility if needed)
-tar -xzf /kaggle/input/wf-raw-splited-v1/closed_world_split.tar.gz -C /kaggle/working/wf_split/closed
-tar -xzf /kaggle/input/wf-raw-splited-v1/open_world_split.tar.gz -C /kaggle/working/wf_split/open
+### Modified Files
+* **[data_generator.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/data_generator.py)**: Modified to read and handle `train_indices_file` configurations for the training split while keeping validation and test flows unchanged. Implements safe sequential reads by mapping positions in the shuffled order to original indices and querying H5 safely.
+* **[run_model.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/run_model.py)**: Modified to calculate epoch lengths (`steps_per_epoch`) based on the size of the active subset indices when `train_indices_file` is specified in the active config.
 
-# 4. Run builder script (Accelerator = None)
-python /kaggle/working/Var-CNN/scripts/build_wfmeta_h5.py \
-  --closed-dir /kaggle/working/wf_split/closed \
-  --open-dir /kaggle/working/wf_split/open \
-  --ranking-json /kaggle/working/Var-CNN/wfmeta/wfmeta_anova_ranked_features_v1.json \
-  --output-dir /kaggle/working/h5_build_open_only \
-  --seq-length 5000 \
-  --build open_only
-```
-Output results are published as a new Kaggle Dataset: `wfmeta-ow-only-h5-v1` (containing `wfmeta_open_only_v1.h5`).
+### Verification & SHA256 Checksums
+The dry-run pipeline test was successfully verified. The SHA256 checksums of the generated index files are:
+* **`cw100_train_indices.npy`**: `2882b0ee6a507f999b61ae32fe7af1b850e485332b9321d8568837875d32056e`
+* **`cw300_train_indices.npy`**: `76903de00c5b5317dfa3ad493379c8222506b4cf1a1545200ef74bc6c974d611`
+* **`cw550_train_indices.npy`**: `91230359349d4e099994985b7ce0037173d1712b250f9de8a7075b8bd8a0f72b`
 
----
-
-### 5. Verify Compiled H5 Files Structure (Python Inference Test)
-```python
-import h5py
-import os
-
-h5_files = [
-    ("/kaggle/working/h5_build/wfmeta_closed_world_v1.h5", "Closed-World"),
-    ("/kaggle/working/h5_build/wfmeta_open_world_v1.h5", "Open-World"),
-    ("/kaggle/working/h5_build_open_only/wfmeta_open_only_v1.h5", "Open-Only")
-]
-
-for h5_path, label in h5_files:
-    if not os.path.exists(h5_path):
-        continue
-    try:
-        with h5py.File(h5_path, "r") as f:
-            print(f"\n=== Inspecting {label} ({os.path.basename(h5_path)}) ===")
-            for split in f.keys():
-                print(f"  Split: {split}")
-                for ds in f[split].keys():
-                    print(f"    Dataset: {ds} | Shape: {f[split][ds].shape} | Dtype: {f[split][ds].dtype}")
-    except Exception as e:
-        print(f"File {h5_path} check failed: {str(e)}")
-```
-
+### Git Synchronization
+* **Commit Hash**: `ffcc7ad` (Integrate Closed-World Low-data evaluation pipeline)
+* Pushed successfully to `main` branch on GitHub.
