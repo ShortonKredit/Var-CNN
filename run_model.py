@@ -49,7 +49,14 @@ def train_and_val(config, model, callbacks, mixture_num=None, sub_model_name=Non
 
         data_file = config['processed_h5']
         with h5py.File(data_file, 'r') as f:
-            train_size = len(f['training_data/labels'])
+            if "train_indices_file" in config:
+                indices_path = config["train_indices_file"]
+                if os.path.exists(indices_path):
+                    train_size = len(np.load(indices_path))
+                else:
+                    raise FileNotFoundError(f"train_indices_file not found at {indices_path}")
+            else:
+                train_size = len(f['training_data/labels'])
             val_size = len(f['validation_data/labels'])
 
         train_steps = int(np.ceil(train_size / batch_size))

@@ -120,22 +120,30 @@ def generate(config, data_type, mixture_num=None):
         meta_ds = grp[meta_ds_name] if (meta_ds_name and meta_ds_name in grp) else None
         labels_ds = grp['labels']
         
-        num_samples = len(labels_ds)
-        indices = np.arange(num_samples)
-        
-        # Shuffle indices for training_data (not for validation_data or test_data)
-        if data_type == 'training_data':
-            np.random.shuffle(indices)
+        if data_type == 'training_data' and config.get("train_indices_file"):
+            indices_path = config["train_indices_file"]
+            sample_indices = np.load(indices_path)
+            num_samples = len(sample_indices)
+            order = np.arange(num_samples)
+            np.random.shuffle(order)
+        else:
+            num_samples = len(labels_ds)
+            sample_indices = np.arange(num_samples)
+            order = np.arange(num_samples)
+            if data_type == 'training_data':
+                np.random.shuffle(order)
 
         batch_start = 0
         while True:
             if batch_start >= num_samples:
                 batch_start = 0
                 if data_type == 'training_data':
-                    np.random.shuffle(indices)
+                    np.random.shuffle(order)
 
-            batch_indices = indices[batch_start:batch_start + batch_size]
+            batch_positions = order[batch_start:batch_start + batch_size]
             batch_start += batch_size
+
+            batch_indices = sample_indices[batch_positions]
 
             inputs = {}
             
