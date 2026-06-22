@@ -5,7 +5,7 @@ def main():
     configs_dir = "configs/lowdata"
     os.makedirs(configs_dir, exist_ok=True)
 
-    k_values = [60, 80, 100, 300, 550]
+    k_values = [40, 50, 60, 80, 100, 300, 550]
     
     # 6 models mappings definition
     models_def = [
@@ -104,7 +104,7 @@ def main():
                 json.dump(config, f, indent=4)
             print(f"Generated lowdata config: {cfg_path}")
 
-    print("All 30 lowdata configurations generated successfully.")
+    print("All 42 lowdata configurations generated successfully.")
 
 if __name__ == "__main__":
     main()
