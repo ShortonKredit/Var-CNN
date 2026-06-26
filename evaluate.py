@@ -27,34 +27,62 @@ def find_accuracy(model_predictions, conf_thresh, actual_labels=None,
 
     # Calculates output classes (classes with the highest probability)
     actual_labels_idx = np.argmax(actual_labels, axis=1)
-
-    # Changes predictions according to confidence threshold
+    
+    is_binary = (model_predictions.shape[1] == 2)
     thresh_model_labels = np.zeros(len(model_predictions))
-    for inst_num, softmax in enumerate(model_predictions):
-        predicted_class = np.argmax(softmax)
-        if predicted_class < num_mon_sites and \
-                softmax[predicted_class] < conf_thresh:
-            thresh_model_labels[inst_num] = num_mon_sites
-        else:
-            thresh_model_labels[inst_num] = predicted_class
 
-    # Computes TPR and FPR
-    two_class_true_pos = 0  # Mon correctly classified as any mon site
-    multi_class_true_pos = 0  # Mon correctly classified as specific mon site
-    false_pos = 0  # Unmon incorrectly classified as mon site
+    if is_binary:
+        # Class 0: Monitored
+        # Class 1: Unmonitored
+        # Predict monitored (0) if monitored prob >= conf_thresh, else unmonitored (1)
+        for inst_num, softmax in enumerate(model_predictions):
+            if softmax[0] >= conf_thresh:
+                thresh_model_labels[inst_num] = 0
+            else:
+                thresh_model_labels[inst_num] = 1
 
-    for inst_num, inst_label in enumerate(actual_labels_idx):
-        if inst_label == num_mon_sites:  # Supposed to be unmon site
-            if thresh_model_labels[inst_num] < num_mon_sites:
-                false_pos += 1
-        else:  # Supposed to be mon site
-            if thresh_model_labels[inst_num] < num_mon_sites:
-                two_class_true_pos += 1
-            if thresh_model_labels[inst_num] == inst_label:
-                multi_class_true_pos += 1
+        two_class_true_pos = 0
+        multi_class_true_pos = 0  # In binary case, this is the same as two_class_true_pos
+        false_pos = 0
 
-    actual_mon_samples = np.sum(actual_labels_idx < num_mon_sites)
-    actual_unmon_samples = np.sum(actual_labels_idx == num_mon_sites)
+        for inst_num, inst_label in enumerate(actual_labels_idx):
+            if inst_label == 1:  # Supposed to be unmon
+                if thresh_model_labels[inst_num] == 0:  # Classified as mon
+                    false_pos += 1
+            else:  # Supposed to be mon (0)
+                if thresh_model_labels[inst_num] == 0:  # Classified as mon
+                    two_class_true_pos += 1
+                    multi_class_true_pos += 1
+
+        actual_mon_samples = np.sum(actual_labels_idx == 0)
+        actual_unmon_samples = np.sum(actual_labels_idx == 1)
+    else:
+        # Standard multi-class (101 classes) open-world or closed-world
+        for inst_num, softmax in enumerate(model_predictions):
+            predicted_class = np.argmax(softmax)
+            if predicted_class < num_mon_sites and \
+                    softmax[predicted_class] < conf_thresh:
+                thresh_model_labels[inst_num] = num_mon_sites
+            else:
+                thresh_model_labels[inst_num] = predicted_class
+
+        # Computes TPR and FPR
+        two_class_true_pos = 0  # Mon correctly classified as any mon site
+        multi_class_true_pos = 0  # Mon correctly classified as specific mon site
+        false_pos = 0  # Unmon incorrectly classified as mon site
+
+        for inst_num, inst_label in enumerate(actual_labels_idx):
+            if inst_label == num_mon_sites:  # Supposed to be unmon site
+                if thresh_model_labels[inst_num] < num_mon_sites:
+                    false_pos += 1
+            else:  # Supposed to be mon site
+                if thresh_model_labels[inst_num] < num_mon_sites:
+                    two_class_true_pos += 1
+                if thresh_model_labels[inst_num] == inst_label:
+                    multi_class_true_pos += 1
+
+        actual_mon_samples = np.sum(actual_labels_idx < num_mon_sites)
+        actual_unmon_samples = np.sum(actual_labels_idx == num_mon_sites)
 
     denominator = actual_mon_samples if actual_mon_samples > 0 else (num_mon_sites * num_mon_inst_test)
     if denominator > 0:
@@ -64,20 +92,20 @@ def find_accuracy(model_predictions, conf_thresh, actual_labels=None,
         two_class_tpr = 0.0
         multi_class_tpr = 0.0
         
-    two_class_tpr = '%.2f' % two_class_tpr + '%'
-    multi_class_tpr = '%.2f' % multi_class_tpr + '%'
+    two_class_tpr_str = '%.2f' % two_class_tpr + '%'
+    multi_class_tpr_str = '%.2f' % multi_class_tpr + '%'
 
     if num_unmon_sites == 0:  # closed-world
-        fpr = '0.00%'
+        fpr_str = '0.00%'
     else:
         unmon_denominator = actual_unmon_samples if actual_unmon_samples > 0 else num_unmon_sites_test
         if unmon_denominator > 0:
             fpr = false_pos / unmon_denominator * 100
         else:
             fpr = 0.0
-        fpr = '%.2f' % fpr + '%'
+        fpr_str = '%.2f' % fpr + '%'
 
-    return two_class_tpr, multi_class_tpr, fpr
+    return two_class_tpr_str, multi_class_tpr_str, fpr_str
 
 
 def log_cw(results, sub_model_name, softmax, **parameters):
@@ -107,6 +135,30 @@ def log_cw(results, sub_model_name, softmax, **parameters):
         results['%s_precision' % sub_model_name] = float(prec)
         results['%s_recall' % sub_model_name] = float(rec)
         results['%s_f1_score' % sub_model_name] = float(f1)
+
+        # Detailed binary metrics
+        if softmax.shape[1] == 2:
+            prec_mon = precision_score(actual_labels_idx, predicted_labels, pos_label=0, average='binary', zero_division=0)
+            rec_mon = recall_score(actual_labels_idx, predicted_labels, pos_label=0, average='binary', zero_division=0)
+            f1_mon = f1_score(actual_labels_idx, predicted_labels, pos_label=0, average='binary', zero_division=0)
+
+            prec_unmon = precision_score(actual_labels_idx, predicted_labels, pos_label=1, average='binary', zero_division=0)
+            rec_unmon = recall_score(actual_labels_idx, predicted_labels, pos_label=1, average='binary', zero_division=0)
+            f1_unmon = f1_score(actual_labels_idx, predicted_labels, pos_label=1, average='binary', zero_division=0)
+
+            print('\t precision (monitored): %.4f' % prec_mon)
+            print('\t recall (monitored): %.4f' % rec_mon)
+            print('\t f1-score (monitored): %.4f' % f1_mon)
+            print('\t precision (unmonitored): %.4f' % prec_unmon)
+            print('\t recall (unmonitored): %.4f' % rec_unmon)
+            print('\t f1-score (unmonitored): %.4f' % f1_unmon)
+
+            results['%s_precision_mon' % sub_model_name] = float(prec_mon)
+            results['%s_recall_mon' % sub_model_name] = float(rec_mon)
+            results['%s_f1_score_mon' % sub_model_name] = float(f1_mon)
+            results['%s_precision_unmon' % sub_model_name] = float(prec_unmon)
+            results['%s_recall_unmon' % sub_model_name] = float(rec_unmon)
+            results['%s_f1_score_unmon' % sub_model_name] = float(f1_unmon)
 
 
 def log_ow(results, sub_model_name, softmax, **parameters):
@@ -155,6 +207,17 @@ def main(config):
     with h5py.File(data_file, 'r') as f:
         test_labels = f['test_data/labels'][:]
 
+    scenario = config.get("scenario", "closed_world")
+    is_cw = (scenario == "closed_world") or (test_labels.shape[1] == 100) or (num_unmon_sites == 0)
+
+    if not is_cw:
+        # Convert 101-class labels to 2-class binary labels
+        class_indices = np.argmax(test_labels, axis=1)
+        binary_labels = np.zeros((len(test_labels), 2), dtype=np.float32)
+        binary_labels[class_indices < num_mon_sites, 0] = 1.0
+        binary_labels[class_indices == num_mon_sites, 1] = 1.0
+        test_labels = binary_labels
+
     if is_flat:
         model_id = config.get("model_id", "default_model")
         output_dir = config.get("output_dir", "/kaggle/working/outputs")
@@ -168,9 +231,6 @@ def main(config):
             raise FileNotFoundError(f"Predictions not found at {predictions_path}")
 
         softmax = np.load(predictions_path)
-        
-        scenario = config.get("scenario", "closed_world")
-        is_cw = (scenario == "closed_world") or (test_labels.shape[1] == 100) or (num_unmon_sites == 0)
 
         results = {}
         parameters = {
@@ -188,12 +248,12 @@ def main(config):
             log_cw(results, model_id, softmax, **parameters)
         else:
             print("\n" + "="*50)
-            print("CLOSED-WORLD METRICS (Evaluation without Threshold)")
+            print("OPEN-WORLD BINARY METRICS (Threshold = 0.5)")
             print("="*50)
             log_cw(results, model_id, softmax, **parameters)
             
             print("\n" + "="*50)
-            print("OPEN-WORLD METRICS (Threshold Analysis)")
+            print("OPEN-WORLD BINARY METRICS (Threshold Analysis)")
             print("="*50)
             log_ow(results, model_id, softmax, **parameters)
 
@@ -235,19 +295,19 @@ def main(config):
                 predictions['ensemble'] = ensemble_softmax
 
         results = {}
-        if num_unmon_sites == 0:  # Closed-world
+        if is_cw:  # Closed-world
             print("\n" + "="*50)
             print("CLOSED-WORLD RESULTS (Unmonitored = 0)")
             print("="*50)
             log_setting('closed', predictions, results, **parameters)
         else:  # Open-world
             print("\n" + "="*50)
-            print("CLOSED-WORLD METRICS (Evaluation without Threshold)")
+            print("OPEN-WORLD BINARY METRICS (Threshold = 0.5)")
             print("="*50)
             log_setting('closed', predictions, results, **parameters)
             
             print("\n" + "="*50)
-            print("OPEN-WORLD METRICS (Threshold Analysis)")
+            print("OPEN-WORLD BINARY METRICS (Threshold Analysis)")
             print("="*50)
             log_setting('open', predictions, results, **parameters)
 
