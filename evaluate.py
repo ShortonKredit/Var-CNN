@@ -316,7 +316,113 @@ def main(config):
 
 
 if __name__ == '__main__':
-    with open('config.json') as config_file:
-        config = json.load(config_file)
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description="Evaluate single models or ensembles.")
+    parser.add_argument('--config', type=str, help='Path to configuration JSON file')
+    parser.add_argument('--ensemble', nargs='+', help='Paths to multiple configuration JSON files to evaluate as an ensemble')
+    args = parser.parse_args()
 
-    main(config)
+    if args.ensemble:
+        configs = []
+        for path in args.ensemble:
+            with open(path, 'r', encoding='utf-8') as f:
+                configs.append(json.load(f))
+        
+        first_config = configs[0]
+        scenario = first_config.get("scenario", "closed_world")
+        processed_h5 = first_config["processed_h5"]
+        num_mon_sites = first_config["num_mon_sites"]
+        num_mon_inst_test = first_config["num_mon_inst_test"]
+        num_unmon_sites_test = first_config["num_unmon_sites_test"]
+        num_unmon_sites = first_config["num_unmon_sites"]
+        
+        with h5py.File(processed_h5, 'r') as f:
+            test_labels = f['test_data/labels'][:]
+            
+        is_cw = (scenario == "closed_world") or (test_labels.shape[1] == 100) or (num_unmon_sites == 0)
+        
+        if not is_cw:
+            class_indices = np.argmax(test_labels, axis=1)
+            binary_labels = np.zeros((len(test_labels), 2), dtype=np.float32)
+            binary_labels[class_indices < num_mon_sites, 0] = 1.0
+            binary_labels[class_indices == num_mon_sites, 1] = 1.0
+            test_labels = binary_labels
+            
+        ensemble_softmax = None
+        loaded_count = 0
+        
+        for cfg in configs:
+            model_id = cfg["model_id"]
+            output_dir = cfg.get("output_dir", "/kaggle/working/outputs")
+            if not output_dir.endswith(model_id):
+                target_dir = os.path.join(output_dir, model_id)
+            else:
+                target_dir = output_dir
+                
+            pred_file = os.path.join(target_dir, f"{model_id}_model.npy")
+            if not os.path.exists(pred_file):
+                pred_file_fallback = os.path.join(target_dir, f"{model_id}_predictions.npy")
+                if os.path.exists(pred_file_fallback):
+                    pred_file = pred_file_fallback
+                else:
+                    print(f"[!] Warning: Prediction file not found at {pred_file}")
+                    continue
+                
+            softmax = np.load(pred_file)
+            if ensemble_softmax is None:
+                ensemble_softmax = np.zeros_like(softmax)
+            ensemble_softmax += softmax
+            loaded_count += 1
+            
+        if loaded_count == 0:
+            print("[!] Error: No prediction files could be loaded.")
+            sys.exit(1)
+            
+        ensemble_softmax = ensemble_softmax / loaded_count
+        
+        results = {}
+        parameters = {
+            'actual_labels': test_labels,
+            'num_mon_sites': num_mon_sites,
+            'num_mon_inst_test': num_mon_inst_test,
+            'num_unmon_sites_test': num_unmon_sites_test,
+            'num_unmon_sites': num_unmon_sites
+        }
+        
+        if is_cw:
+            print("\n" + "="*50)
+            print("CLOSED-WORLD ENSEMBLE RESULTS")
+            print("="*50)
+            log_cw(results, "ensemble", ensemble_softmax, **parameters)
+        else:
+            print("\n" + "="*50)
+            print("OPEN-WORLD BINARY ENSEMBLE METRICS (Threshold = 0.5)")
+            print("="*50)
+            log_cw(results, "ensemble", ensemble_softmax, **parameters)
+            
+            print("\n" + "="*50)
+            print("OPEN-WORLD BINARY ENSEMBLE METRICS (Threshold Analysis)")
+            print("="*50)
+            log_ow(results, "ensemble", ensemble_softmax, **parameters)
+            
+        out_dir = first_config.get("output_dir", "/kaggle/working/outputs")
+        os.makedirs(out_dir, exist_ok=True)
+        result_path = os.path.join(out_dir, "ensemble_result.json")
+        with open(result_path, 'w') as f:
+            json.dump(results, f, sort_keys=True, indent=4)
+        print(f"\nSaved ensemble evaluation results to {result_path}")
+        
+    elif args.config:
+        with open(args.config, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        main(config)
+    else:
+        config_file_path = 'config.json'
+        if not os.path.exists(config_file_path):
+            print(f"[!] Error: {config_file_path} not found. Please provide --config or --ensemble arguments.")
+            sys.exit(1)
+        with open(config_file_path) as config_file:
+            config = json.load(config_file)
+        main(config)
