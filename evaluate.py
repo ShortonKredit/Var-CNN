@@ -301,8 +301,8 @@ if __name__ == '__main__':
         processed_h5 = first_config["processed_h5"]
         num_mon_sites = first_config["num_mon_sites"]
         num_mon_inst_test = first_config["num_mon_inst_test"]
-        num_unmon_sites_test = first_config["num_unmon_sites_test"]
-        num_unmon_sites = first_config["num_unmon_sites"]
+        num_unmon_sites_test = first_config.get("num_unmon_sites_test", 0)
+        num_unmon_sites = first_config.get("num_unmon_sites", first_config.get("num_unmon_sites_train", 0) + first_config.get("num_unmon_sites_test", 0))
         
         with h5py.File(processed_h5, 'r') as f:
             test_labels = f['test_data/labels'][:]
