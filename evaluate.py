@@ -189,7 +189,8 @@ def log_ow(results, sub_model_name, softmax, **parameters):
             softmax, conf_thresh, **parameters)
         print('\t conf: %f' % conf_thresh)
         print('\t \t two-class TPR: %s' % two_class_tpr)
-        print('\t \t multi-class TPR: %s' % multi_class_tpr)
+        if softmax.shape[1] > 2:
+            print('\t \t multi-class TPR: %s' % multi_class_tpr)
         print('\t \t FPR: %s' % fpr)
 
         prefix = '%s_%f' % (sub_model_name, conf_thresh)
