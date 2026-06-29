@@ -9,14 +9,14 @@ venv/
 ENV/
 .env
 
-# Dự liệu (CỰC KỲ QUAN TRỌNG: Không đẩy 100GB lên GitHub)
+# Data
 data/
 OpenWorld/
 *.npz
 *.h5
 *.tar.gz
 
-# Kết quả huấn luyện và dự đoán
+
 predictions/
 job_result.json
 *.weights.h5
@@ -29,13 +29,11 @@ config_backup.json
 .vscode/
 .idea/
 
-# OS rác
 .DS_Store
 Thumbs.db
 
 @'
 
-# Thêm cấu hình chặn dữ liệu mới và file tạm (Var-CNN)
 0_123movies.is_0.csv
 backup/
 wtfpad_df/
