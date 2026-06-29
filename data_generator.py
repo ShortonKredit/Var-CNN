@@ -161,6 +161,13 @@ def generate(config, data_type, mixture_num=None):
                 inputs['metadata_input'] = meta_batch.astype(np.float32)
 
             labels_batch = safe_h5_read(labels_ds, batch_indices).astype(np.float32)
+            if config.get("scenario") == "open_world":
+                num_mon_sites = config["num_mon_sites"]
+                class_indices = np.argmax(labels_batch, axis=1)
+                binary_labels = np.zeros((len(labels_batch), 2), dtype=np.float32)
+                binary_labels[class_indices < num_mon_sites, 0] = 1.0
+                binary_labels[class_indices == num_mon_sites, 1] = 1.0
+                labels_batch = binary_labels
 
             # Test data does not yield labels
             if data_type == 'test_data':
