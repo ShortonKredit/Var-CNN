@@ -16,6 +16,44 @@ def get_model(config):
     Args:
         config (dict): Deserialized JSON config file (see config.json)
     """
+    import os
+    scenario = config.get("scenario", "closed_world")
+    pretrained_weights = config.get("pretrained_open_world_weights") or config.get("pretrained_closed_world_weights")
+
+    if scenario == "open_world" and pretrained_weights:
+        # Build Open-World base model structure (101 classes)
+        base_config = config.copy()
+        base_config["scenario"] = "closed_world"
+        base_config["num_classes"] = config["num_mon_sites"] + 1
+        if "pretrained_open_world_weights" in base_config:
+            del base_config["pretrained_open_world_weights"]
+        if "pretrained_closed_world_weights" in base_config:
+            del base_config["pretrained_closed_world_weights"]
+            
+        base_model, _ = get_model(base_config)
+        
+        # Load pre-trained weights
+        if os.path.exists(pretrained_weights):
+            print(f"Loading pre-trained 101-class Open-World weights from {pretrained_weights}...")
+            base_model.load_weights(pretrained_weights)
+        else:
+            raise FileNotFoundError(f"Pre-trained weights file not found: {pretrained_weights}")
+            
+        # Freeze all layers
+        for layer in base_model.layers:
+            layer.trainable = False
+            
+        # Replace the final fully-connected layer
+        df_features = base_model.layers[-2].output
+        binary_output = Dense(units=2, activation='softmax', name='binary_model_output')(df_features)
+        
+        model = Model(inputs=base_model.inputs, outputs=binary_output)
+        model.compile(loss='categorical_crossentropy',
+                      optimizer=Adamax(0.002),
+                      metrics=['accuracy'])
+                      
+        callbacks = []
+        return model, callbacks
 
     num_mon_sites = config['num_mon_sites']
     num_mon_inst_test = config['num_mon_inst_test']
@@ -82,6 +120,8 @@ def get_model(config):
 
     # Add final softmax layer
     output_classes = config.get("num_classes", num_mon_sites if num_unmon_sites == 0 else num_mon_sites + 1)
+    if scenario == "open_world":
+        output_classes = 2
     model_output = Dense(units=output_classes, activation='softmax',
                          name='model_output')(x)
 

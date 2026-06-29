@@ -18,27 +18,31 @@ def main():
         with open(fpath, "r", encoding="utf-8") as f:
             config = json.load(f)
         
-        # Determine CW model ID by replacing 'ow_' with 'cw_'
         ow_model_id = config.get("model_id")
         if not ow_model_id or not ow_model_id.startswith("ow_"):
             print(f"Skipping {filename}: model_id is not prefixed with ow_")
             continue
             
-        cw_model_id = ow_model_id.replace("ow_", "cw_", 1)
+        # Change model_id to avoid path collisions and mark as retrained
+        retrain_model_id = f"ow_retrain_{ow_model_id[3:]}"
+        config["model_id"] = retrain_model_id
         
-        # Add pre-trained CW weights path
-        weights_path = f"/kaggle/working/outputs/{cw_model_id}/{cw_model_id}.weights.h5"
-        config["pretrained_closed_world_weights"] = weights_path
+        # Point to the pre-trained 101-class Open-World weights file
+        weights_path = f"/kaggle/working/outputs/{ow_model_id}/{ow_model_id}.weights.h5"
+        config["pretrained_open_world_weights"] = weights_path
+        
+        # Remove closed-world key if present to keep configuration clean
+        if "pretrained_closed_world_weights" in config:
+            del config["pretrained_closed_world_weights"]
         
         # Save to targets
         target_path = os.path.join(target_dir, filename)
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
-        print(f"  Generated Var-CNN config: {filename} -> weights: {weights_path}")
+        print(f"  Generated Var-CNN config: {filename} -> new model_id: {retrain_model_id} -> weights: {weights_path}")
 
     # 2. Process Deep Fingerprinting configs from configs/df/
     df_configs_dir = os.path.join(project_dir, "configs", "df")
-    # We only process open world files (df_ow_*) that have a corresponding closed-world model
     df_files = glob.glob(os.path.join(df_configs_dir, "df_ow_*.json"))
     print(f"Found {len(df_files)} Deep Fingerprinting Open-World configurations in df/.")
 
@@ -57,17 +61,23 @@ def main():
             print(f"Skipping {filename}: model_id is not prefixed with df_ow_")
             continue
             
-        cw_model_id = ow_model_id.replace("df_ow_", "df_cw_", 1)
+        # Change model_id to avoid path collisions and mark as retrained
+        retrain_model_id = ow_model_id.replace("df_ow_", "df_ow_retrain_", 1)
+        config["model_id"] = retrain_model_id
         
-        # Add pre-trained CW weights path
-        weights_path = f"/kaggle/working/outputs/{cw_model_id}/{cw_model_id}.weights.h5"
-        config["pretrained_closed_world_weights"] = weights_path
+        # Point to the pre-trained 101-class Open-World weights file
+        weights_path = f"/kaggle/working/outputs/{ow_model_id}/{ow_model_id}.weights.h5"
+        config["pretrained_open_world_weights"] = weights_path
         
+        # Remove closed-world key if present to keep configuration clean
+        if "pretrained_closed_world_weights" in config:
+            del config["pretrained_closed_world_weights"]
+            
         # Save to targets
         target_path = os.path.join(target_dir, filename)
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
-        print(f"  Generated DF config: {filename} -> weights: {weights_path}")
+        print(f"  Generated DF config: {filename} -> new model_id: {retrain_model_id} -> weights: {weights_path}")
 
     print("\nAll retrain configurations generated successfully under configs/ow_retrain/!")
 

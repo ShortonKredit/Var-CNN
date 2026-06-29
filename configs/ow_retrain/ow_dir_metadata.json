@@ -16,12 +16,12 @@
     "dir_dilations": true,
     "time_dilations": true,
     "output_dir": "/kaggle/working/outputs/",
-    "model_id": "ow_dir_metadata",
+    "model_id": "ow_retrain_dir_metadata",
     "sequence_dataset": "dir_seq",
     "sequence_input_name": "dir_input",
     "sequence_model_suffix": "dir",
     "metadata_dataset": "metadata",
     "metadata_type": "metadata",
     "wfmeta_k": 7,
-    "pretrained_closed_world_weights": "/kaggle/working/outputs/cw_dir_metadata/cw_dir_metadata.weights.h5"
+    "pretrained_open_world_weights": "/kaggle/working/outputs/ow_dir_metadata/ow_dir_metadata.weights.h5"
 }

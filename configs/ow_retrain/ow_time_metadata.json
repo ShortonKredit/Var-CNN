@@ -16,12 +16,12 @@
     "dir_dilations": true,
     "time_dilations": true,
     "output_dir": "/kaggle/working/outputs/",
-    "model_id": "ow_time_metadata",
+    "model_id": "ow_retrain_time_metadata",
     "sequence_dataset": "time_seq",
     "sequence_input_name": "time_input",
     "sequence_model_suffix": "time",
     "metadata_dataset": "metadata",
     "metadata_type": "metadata",
     "wfmeta_k": 7,
-    "pretrained_closed_world_weights": "/kaggle/working/outputs/cw_time_metadata/cw_time_metadata.weights.h5"
+    "pretrained_open_world_weights": "/kaggle/working/outputs/ow_time_metadata/ow_time_metadata.weights.h5"
 }

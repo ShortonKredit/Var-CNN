@@ -218,6 +218,63 @@ def get_model(config, mixture_num=None, sub_model_name=None):
         sub_model_name (str, optional): Name of the current sub-model (e.g., 'dir_metadata')
     """
     is_flat = "sequence_dataset" in config
+    scenario = config.get("scenario", "closed_world")
+    pretrained_weights = config.get("pretrained_open_world_weights") or config.get("pretrained_closed_world_weights")
+
+    if is_flat and scenario == "open_world" and pretrained_weights:
+        # Build Open-World base model structure (101 classes)
+        base_config = config.copy()
+        base_config["scenario"] = "closed_world"
+        base_config["num_classes"] = config["num_mon_sites"] + 1
+        if "pretrained_open_world_weights" in base_config:
+            del base_config["pretrained_open_world_weights"]
+        if "pretrained_closed_world_weights" in base_config:
+            del base_config["pretrained_closed_world_weights"]
+            
+        base_model, _ = get_model(base_config)
+        
+        # Load pre-trained Open-World weights
+        if os.path.exists(pretrained_weights):
+            print(f"Loading pre-trained 101-class Open-World weights from {pretrained_weights}...")
+            base_model.load_weights(pretrained_weights)
+        else:
+            raise FileNotFoundError(f"Pre-trained weights file not found: {pretrained_weights}")
+            
+        # Freeze all layers of base_model
+        for layer in base_model.layers:
+            layer.trainable = False
+            
+        # Replace the final classification layer with 2 classes
+        base_features = base_model.layers[-2].output
+        binary_output = Dense(units=2, activation='softmax', name='binary_model_output')(base_features)
+        
+        model = Model(inputs=base_model.inputs, outputs=binary_output)
+        model.compile(loss='categorical_crossentropy',
+                      optimizer=Adam(0.001),
+                      metrics=['accuracy'])
+                      
+        model_id = config.get("model_id", "default_model")
+        output_dir = config.get("output_dir", "/kaggle/working/outputs")
+        if not output_dir.endswith(model_id):
+            target_dir = os.path.join(output_dir, model_id)
+        else:
+            target_dir = output_dir
+        os.makedirs(target_dir, exist_ok=True)
+        weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
+        
+        base_patience = config['var_cnn_base_patience']
+        lr_reducer = ReduceLROnPlateau(monitor='val_accuracy', factor=np.sqrt(0.1),
+                                       cooldown=0, patience=base_patience,
+                                       min_lr=1e-5, verbose=1)
+        es_multiplier = config.get("early_stopping_multiplier", 2)
+        early_stopping = EarlyStopping(monitor='val_accuracy',
+                                       patience=es_multiplier * base_patience)
+        model_checkpoint = ModelCheckpoint(weights_file, monitor='val_accuracy',
+                                           save_best_only=True,
+                                           save_weights_only=True, verbose=1)
+                                           
+        callbacks = [lr_reducer, early_stopping, model_checkpoint]
+        return model, callbacks
 
     if is_flat:
         model_id = config.get("model_id", "default_model")
@@ -235,6 +292,8 @@ def get_model(config, mixture_num=None, sub_model_name=None):
         metadata_type = config.get("metadata_type")
         wfmeta_k = config.get("wfmeta_k", 10)
         output_classes = config.get("num_classes", 100)
+        if scenario == "open_world":
+            output_classes = 2
 
         if seq_suffix == 'time' or 'time' in seq_suffix:
             use_dilations = config.get('time_dilations', True)
@@ -397,16 +456,5 @@ def get_model(config, mixture_num=None, sub_model_name=None):
                                        save_best_only=True,
                                        save_weights_only=True, verbose=1)
 
-    class DriveBackupCallback(Callback):
-        def on_epoch_end(self, epoch, logs=None):
-            src = weights_file
-            dst_dir = '/content/drive/MyDrive/Var-CNN-Colab2'
-            if os.path.exists(src) and os.path.exists(dst_dir):
-                try:
-                    shutil.copy(src, os.path.join(dst_dir, os.path.basename(weights_file)))
-                    print(f"\n[Colab Backup] Synced {weights_file} to Google Drive at epoch {epoch+1}")
-                except Exception:
-                    pass
-
-    callbacks = [lr_reducer, early_stopping, model_checkpoint, DriveBackupCallback()]
+    callbacks = [lr_reducer, early_stopping, model_checkpoint]
     return model, callbacks
