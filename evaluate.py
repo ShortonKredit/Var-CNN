@@ -8,7 +8,7 @@ import h5py
 import os
 
 try:
-    from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+    from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, roc_auc_score
 except ImportError:
     def accuracy_score(y_true, y_pred):
         return np.mean(y_true == y_pred)
@@ -17,6 +17,8 @@ except ImportError:
     def recall_score(y_true, y_pred, **kwargs):
         return 0.0
     def f1_score(y_true, y_pred, **kwargs):
+        return 0.0
+    def roc_auc_score(y_true, y_score, **kwargs):
         return 0.0
 
 
@@ -115,7 +117,6 @@ def log_cw(results, sub_model_name, softmax, **parameters):
     print('\t raw accuracy (TPR): %s' % multi_class_tpr)
     results['%s_acc' % sub_model_name] = multi_class_tpr
 
-    # --- TÍNH TOÁN BỔ SUNG PRECISION, RECALL, F1-SCORE ---
     actual_labels = parameters.get('actual_labels')
     if actual_labels is not None:
         actual_labels_idx = np.argmax(actual_labels, axis=1)
@@ -163,6 +164,26 @@ def log_cw(results, sub_model_name, softmax, **parameters):
 
 def log_ow(results, sub_model_name, softmax, **parameters):
     print('%s model:' % sub_model_name)
+    
+    # Calculate ROC AUC
+    actual_labels = parameters.get('actual_labels')
+    if actual_labels is not None:
+        actual_labels_idx = np.argmax(actual_labels, axis=1)
+        num_mon_sites = parameters.get('num_mon_sites', 100)
+        y_true = (actual_labels_idx < num_mon_sites).astype(np.float32)
+        
+        if softmax.shape[1] == 2:
+            y_score = softmax[:, 0]  # monitored prob
+        else:
+            y_score = 1.0 - softmax[:, num_mon_sites]  # monitored prob is 1 - unmonitored prob
+            
+        try:
+            auc_val = roc_auc_score(y_true, y_score)
+            print('\t ROC AUC (Monitored vs Unmonitored): %.4f' % auc_val)
+            results['%s_auc' % sub_model_name] = float(auc_val)
+        except Exception as e:
+            print('\t Could not calculate ROC AUC: %s' % e)
+
     for conf_thresh in np.arange(0, 1.01, 0.1):
         two_class_tpr, multi_class_tpr, fpr = find_accuracy(
             softmax, conf_thresh, **parameters)
@@ -187,8 +208,6 @@ def log_setting(setting, predictions, results, **parameters):
 
 
 def main(config):
-    is_flat = "sequence_dataset" in config
-
     num_mon_sites = config['num_mon_sites']
     num_mon_inst_test = config['num_mon_inst_test']
     num_mon_inst_train = config['num_mon_inst_train']
@@ -218,101 +237,48 @@ def main(config):
         binary_labels[class_indices == num_mon_sites, 1] = 1.0
         test_labels = binary_labels
 
-    if is_flat:
-        model_id = config.get("model_id", "default_model")
-        output_dir = config.get("output_dir", "/kaggle/working/outputs")
-        if not output_dir.endswith(model_id):
-            target_dir = os.path.join(output_dir, model_id)
-        else:
-            target_dir = output_dir
-
-        predictions_path = os.path.join(target_dir, f"{model_id}_model.npy")
-        if not os.path.exists(predictions_path):
-            raise FileNotFoundError(f"Predictions not found at {predictions_path}")
-
-        softmax = np.load(predictions_path)
-
-        results = {}
-        parameters = {
-            'actual_labels': test_labels,
-            'num_mon_sites': num_mon_sites,
-            'num_mon_inst_test': num_mon_inst_test,
-            'num_unmon_sites_test': num_unmon_sites_test,
-            'num_unmon_sites': num_unmon_sites
-        }
-
-        if is_cw:
-            print("\n" + "="*50)
-            print("CLOSED-WORLD RESULTS")
-            print("="*50)
-            log_cw(results, model_id, softmax, **parameters)
-        else:
-            print("\n" + "="*50)
-            print("OPEN-WORLD BINARY METRICS (Threshold = 0.5)")
-            print("="*50)
-            log_cw(results, model_id, softmax, **parameters)
-            
-            print("\n" + "="*50)
-            print("OPEN-WORLD BINARY METRICS (Threshold Analysis)")
-            print("="*50)
-            log_ow(results, model_id, softmax, **parameters)
-
-        result_path = os.path.join(target_dir, f"{model_id}_result.json")
-        with open(result_path, 'w') as f:
-            json.dump(results, f, sort_keys=True, indent=4)
-        print(f"Saved evaluation results to {result_path}")
+    model_id = config.get("model_id", "default_model")
+    output_dir = config.get("output_dir", "/kaggle/working/outputs")
+    if not output_dir.endswith(model_id):
+        target_dir = os.path.join(output_dir, model_id)
     else:
-        predictions_dir = config['predictions_dir']
-        mixture = config['mixture']
+        target_dir = output_dir
 
-        # Aggregates predictions from mixture models
-        predictions = {}
-        ensemble_softmax = None
-        for inner_comb in mixture:
-            sub_model_name = '_'.join(inner_comb)
-            softmax_file = os.path.join(predictions_dir, f"{sub_model_name}_model.npy")
-            if not os.path.exists(softmax_file):
-                print(f"[!] Warning: prediction file {softmax_file} not found.")
-                continue
-            softmax = np.load(softmax_file)
-            if ensemble_softmax is None:
-                ensemble_softmax = np.zeros_like(softmax)
-            predictions[sub_model_name] = softmax
+    predictions_path = os.path.join(target_dir, f"{model_id}_model.npy")
+    if not os.path.exists(predictions_path):
+        raise FileNotFoundError(f"Predictions not found at {predictions_path}")
 
-        parameters = {'actual_labels': test_labels,
-                      'num_mon_sites': num_mon_sites,
-                      'num_mon_inst_test': num_mon_inst_test,
-                      'num_unmon_sites_test': num_unmon_sites_test,
-                      'num_unmon_sites': num_unmon_sites}
+    softmax = np.load(predictions_path)
 
-        # Performs simple average to get ensemble predictions
-        if predictions and ensemble_softmax is not None:
-            for softmax in predictions.values():
-                ensemble_softmax += softmax
-            assert ensemble_softmax is not None
-            ensemble_softmax = ensemble_softmax / len(predictions)
-            if len(predictions) > 1:
-                predictions['ensemble'] = ensemble_softmax
+    results = {}
+    parameters = {
+        'actual_labels': test_labels,
+        'num_mon_sites': num_mon_sites,
+        'num_mon_inst_test': num_mon_inst_test,
+        'num_unmon_sites_test': num_unmon_sites_test,
+        'num_unmon_sites': num_unmon_sites
+    }
 
-        results = {}
-        if is_cw:  # Closed-world
-            print("\n" + "="*50)
-            print("CLOSED-WORLD RESULTS (Unmonitored = 0)")
-            print("="*50)
-            log_setting('closed', predictions, results, **parameters)
-        else:  # Open-world
-            print("\n" + "="*50)
-            print("OPEN-WORLD BINARY METRICS (Threshold = 0.5)")
-            print("="*50)
-            log_setting('closed', predictions, results, **parameters)
-            
-            print("\n" + "="*50)
-            print("OPEN-WORLD BINARY METRICS (Threshold Analysis)")
-            print("="*50)
-            log_setting('open', predictions, results, **parameters)
+    if is_cw:
+        print("\n" + "="*50)
+        print("CLOSED-WORLD RESULTS")
+        print("="*50)
+        log_cw(results, model_id, softmax, **parameters)
+    else:
+        print("\n" + "="*50)
+        print("OPEN-WORLD BINARY METRICS (Threshold = 0.5)")
+        print("="*50)
+        log_cw(results, model_id, softmax, **parameters)
+        
+        print("\n" + "="*50)
+        print("OPEN-WORLD BINARY METRICS (Threshold Analysis)")
+        print("="*50)
+        log_ow(results, model_id, softmax, **parameters)
 
-        with open('job_result.json', 'w') as f:
-            json.dump(results, f, sort_keys=True, indent=4)
+    result_path = os.path.join(target_dir, f"{model_id}_result.json")
+    with open(result_path, 'w') as f:
+        json.dump(results, f, sort_keys=True, indent=4)
+    print(f"Saved evaluation results to {result_path}")
 
 
 if __name__ == '__main__':

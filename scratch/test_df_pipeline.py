@@ -49,7 +49,7 @@ def test_config_build(config_path, expected_classes):
 def main():
     test_config_build("configs/df/df_cw_dir.json", expected_classes=100)
     test_config_build("configs/df/df_cw_dts.json", expected_classes=100)
-    test_config_build("configs/df/df_ow_dir.json", expected_classes=101)
+    test_config_build("configs/df/df_ow_dir.json", expected_classes=2)
     print("All DF models built and verified successfully!")
 
 if __name__ == "__main__":

@@ -209,20 +209,16 @@ def ResNet18(inputs, suffix, blocks=None, block: Optional[Callable] = None, nume
     return x
 
 
-def get_model(config, mixture_num=None, sub_model_name=None):
+def get_model(config):
     """Returns Var-CNN model to run_model.py
 
     Args:
         config (dict): Deserialized JSON config file (see config.json)
-        mixture_num (int, optional): Index of the mixture in the config
-        sub_model_name (str, optional): Name of the current sub-model (e.g., 'dir_metadata')
     """
-    is_flat = "sequence_dataset" in config
     scenario = config.get("scenario", "closed_world")
     pretrained_weights = config.get("pretrained_open_world_weights") or config.get("pretrained_closed_world_weights")
 
-    if is_flat and scenario == "open_world" and pretrained_weights:
-        # Build Open-World base model structure (101 classes)
+    if scenario == "open_world" and pretrained_weights:
         base_config = config.copy()
         base_config["scenario"] = "closed_world"
         base_config["num_classes"] = config["num_mon_sites"] + 1
@@ -276,155 +272,56 @@ def get_model(config, mixture_num=None, sub_model_name=None):
         callbacks = [lr_reducer, early_stopping, model_checkpoint]
         return model, callbacks
 
-    if is_flat:
-        model_id = config.get("model_id", "default_model")
-        output_dir = config.get("output_dir", "/kaggle/working/outputs")
-        if not output_dir.endswith(model_id):
-            target_dir = os.path.join(output_dir, model_id)
-        else:
-            target_dir = output_dir
-            
-        os.makedirs(target_dir, exist_ok=True)
-        weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
+    # Standard single model construction
+    model_id = config.get("model_id", "default_model")
+    output_dir = config.get("output_dir", "/kaggle/working/outputs")
+    if not output_dir.endswith(model_id):
+        target_dir = os.path.join(output_dir, model_id)
+    else:
+        target_dir = output_dir
         
-        seq_input_name = config.get("sequence_input_name", "dir_input")
-        seq_suffix = config.get("sequence_model_suffix", "dir")
-        metadata_type = config.get("metadata_type")
-        wfmeta_k = config.get("wfmeta_k", 10)
-        output_classes = config.get("num_classes", 100)
-        if scenario == "open_world":
-            output_classes = 2
-
-        if seq_suffix == 'time' or 'time' in seq_suffix:
-            use_dilations = config.get('time_dilations', True)
-        else:
-            use_dilations = config.get('dir_dilations', True)
-
-        seq_length = config['seq_length']
-        base_patience = config['var_cnn_base_patience']
-        use_metadata = metadata_type is not None
-    else:
-        if mixture_num is None or sub_model_name is None:
-            raise ValueError("mixture_num and sub_model_name must be provided for mixture training.")
-            
-        num_mon_sites = config['num_mon_sites']
-        num_mon_inst_test = config['num_mon_inst_test']
-        num_mon_inst_train = config['num_mon_inst_train']
-        num_mon_inst = num_mon_inst_test + num_mon_inst_train
-        num_unmon_sites_test = config['num_unmon_sites_test']
-        num_unmon_sites_train = config['num_unmon_sites_train']
-        num_unmon_sites = num_unmon_sites_test + num_unmon_sites_train
-
-        base_patience = config['var_cnn_base_patience']
-        mixture = config['mixture']
-        use_dir = 'dir' in mixture[mixture_num]
-        use_time = 'time' in mixture[mixture_num]
-        use_metadata = 'metadata' in mixture[mixture_num]
-        use_dir_iat_log = 'dir_iat_log' in mixture[mixture_num]
-        use_dir_x_iat = 'dir_x_iat' in mixture[mixture_num]
-        use_dir_iat_raw = 'dir_iat_raw' in mixture[mixture_num]
-        dir_dilations = config['dir_dilations']
-        time_dilations = config['time_dilations']
-        seq_length = config['seq_length']
-        model_name = config['model_name']
-        output_classes = num_mon_sites if num_unmon_sites == 0 else num_mon_sites + 1
-
-        weights_dir = config.get('data_dir', '.')
-        weights_file = os.path.join(weights_dir, f"{model_name}_{sub_model_name}.weights.h5")
-
-    # Constructs ResNets
-    if is_flat:
-        seq_input = Input(shape=(seq_length, 1,), name=seq_input_name)
-        if use_dilations:
-            seq_output = ResNet18(seq_input, seq_suffix, block=dilated_basic_1d)
-        else:
-            seq_output = ResNet18(seq_input, seq_suffix, block=basic_1d)
-            
-        if use_metadata:
-            meta_dim = 7
-            if metadata_type and metadata_type.startswith('wfmeta'):
-                meta_dim = wfmeta_k
-            metadata_input = Input(shape=(meta_dim,), name='metadata_input')
-            metadata_output = Dense(32)(metadata_input)
-            metadata_output = BatchNormalization()(metadata_output)
-            metadata_output = Activation('relu')(metadata_output)
-    else:
-        # Constructs dir ResNet
-        if use_dir:
-            dir_input = Input(shape=(seq_length, 1,), name='dir_input')
-            if dir_dilations:
-                dir_output = ResNet18(dir_input, 'dir', block=dilated_basic_1d)
-            else:
-                dir_output = ResNet18(dir_input, 'dir', block=basic_1d)
-
-        # Constructs time ResNet
-        if use_time:
-            time_input = Input(shape=(seq_length, 1,), name='time_input')
-            if time_dilations:
-                time_output = ResNet18(time_input, 'time', block=dilated_basic_1d)
-            else:
-                time_output = ResNet18(time_input, 'time', block=basic_1d)
-
-        # Constructs dir_iat_log ResNet
-        if use_dir_iat_log:
-            dir_iat_log_input = Input(shape=(seq_length, 1,), name='dir_iat_log_input')
-            if dir_dilations:
-                dir_iat_log_output = ResNet18(dir_iat_log_input, 'dir_iat_log', block=dilated_basic_1d)
-            else:
-                dir_iat_log_output = ResNet18(dir_iat_log_input, 'dir_iat_log', block=basic_1d)
-
-        # Constructs dir_x_iat ResNet
-        if use_dir_x_iat:
-            dir_x_iat_input = Input(shape=(seq_length, 1,), name='dir_x_iat_input')
-            if dir_dilations:
-                dir_x_iat_output = ResNet18(dir_x_iat_input, 'dir_x_iat', block=dilated_basic_1d)
-            else:
-                dir_x_iat_output = ResNet18(dir_x_iat_input, 'dir_x_iat', block=basic_1d)
-
-        # Constructs dir_iat_raw ResNet
-        if use_dir_iat_raw:
-            dir_iat_raw_input = Input(shape=(seq_length, 1,), name='dir_iat_raw_input')
-            if dir_dilations:
-                dir_iat_raw_output = ResNet18(dir_iat_raw_input, 'dir_iat_raw', block=dilated_basic_1d)
-            else:
-                dir_iat_raw_output = ResNet18(dir_iat_raw_input, 'dir_iat_raw', block=basic_1d)
-
-        # Construct MLP for metadata
-        if use_metadata:
-            metadata_input = Input(shape=(7,), name='metadata_input')
-            metadata_output = Dense(32)(metadata_input)
-            metadata_output = BatchNormalization()(metadata_output)
-            metadata_output = Activation('relu')(metadata_output)
-
-    # Forms input and output lists and possibly add final dense layer
-    input_params = []
-    concat_params = []
+    os.makedirs(target_dir, exist_ok=True)
+    weights_file = os.path.join(target_dir, f"{model_id}.weights.h5")
     
-    if is_flat:
-        input_params.append(seq_input)
-        concat_params.append(seq_output)
-        if use_metadata:
-            input_params.append(metadata_input)
-            concat_params.append(metadata_output)
+    seq_input_name = config.get("sequence_input_name", "dir_input")
+    seq_suffix = config.get("sequence_model_suffix", "dir")
+    metadata_type = config.get("metadata_type")
+    wfmeta_k = config.get("wfmeta_k", 10)
+    output_classes = config.get("num_classes", 100)
+    if scenario == "open_world":
+        output_classes = 2
+
+    if seq_suffix == 'time' or 'time' in seq_suffix:
+        use_dilations = config.get('time_dilations', True)
     else:
-        if use_dir:
-            input_params.append(dir_input)
-            concat_params.append(dir_output)
-        if use_time:
-            input_params.append(time_input)
-            concat_params.append(time_output)
-        if use_dir_iat_log:
-            input_params.append(dir_iat_log_input)
-            concat_params.append(dir_iat_log_output)
-        if use_dir_x_iat:
-            input_params.append(dir_x_iat_input)
-            concat_params.append(dir_x_iat_output)
-        if use_dir_iat_raw:
-            input_params.append(dir_iat_raw_input)
-            concat_params.append(dir_iat_raw_output)
-        if use_metadata:
-            input_params.append(metadata_input)
-            concat_params.append(metadata_output)
+        use_dilations = config.get('dir_dilations', True)
+
+    seq_length = config['seq_length']
+    base_patience = config['var_cnn_base_patience']
+    use_metadata = metadata_type is not None
+
+    # Constructs inputs and outputs
+    seq_input = Input(shape=(seq_length, 1,), name=seq_input_name)
+    if use_dilations:
+        seq_output = ResNet18(seq_input, seq_suffix, block=dilated_basic_1d)
+    else:
+        seq_output = ResNet18(seq_input, seq_suffix, block=basic_1d)
+        
+    if use_metadata:
+        meta_dim = 7
+        if metadata_type and metadata_type.startswith('wfmeta'):
+            meta_dim = wfmeta_k
+        metadata_input = Input(shape=(meta_dim,), name='metadata_input')
+        metadata_output = Dense(32)(metadata_input)
+        metadata_output = BatchNormalization()(metadata_output)
+        metadata_output = Activation('relu')(metadata_output)
+
+    # Forms input and output lists
+    input_params = [seq_input]
+    concat_params = [seq_output]
+    if use_metadata:
+        input_params.append(metadata_input)
+        concat_params.append(metadata_output)
 
     if len(concat_params) == 1:
         combined = concat_params[0]

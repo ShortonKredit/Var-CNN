@@ -52,14 +52,13 @@ def safe_h5_read(dataset, indices):
     return data[unsort_idx]
 
 
-def generate(config, data_type, mixture_num=None):
+def generate(config, data_type):
     """Yields batch of data with the correct content and formatting.
 
     Args:
         config (dict): Deserialized JSON config file (see config.json)
         data_type (str): Either 'training_data', 'validation_data', or
             'test_data'
-        mixture_num (int, optional): Index of the mixture in the config
     """
     batch_size = config['batch_size']
     data_file = config.get('processed_h5')
@@ -75,42 +74,11 @@ def generate(config, data_type, mixture_num=None):
                                           num_unmon_sites_train, num_unmon_sites_test)
 
     # Determine sequence and metadata configuration
-    if "sequence_dataset" in config:
-        # New flat config style
-        seq_ds_name = config["sequence_dataset"]
-        seq_input_name = config["sequence_input_name"]
-        meta_ds_name = config.get("metadata_dataset")
-        meta_type = config.get("metadata_type")
-        wfmeta_k = config.get("wfmeta_k", 10)
-    else:
-        # Backward compatibility fallback
-        if mixture_num is None:
-            raise ValueError("Either mixture_num must be provided or sequence_dataset must be in config.")
-        mixture = config['mixture']
-        inner_comb = mixture[mixture_num]
-        
-        # Mapping old names
-        seq_ds_name = None
-        seq_input_name = None
-        if 'dir' in inner_comb:
-            seq_ds_name = 'dir_seq'
-            seq_input_name = 'dir_input'
-        elif 'time' in inner_comb:
-            seq_ds_name = 'time_seq'
-            seq_input_name = 'time_input'
-        elif 'dir_iat_log' in inner_comb:
-            seq_ds_name = 'dir_iat_log'
-            seq_input_name = 'dir_iat_log_input'
-        elif 'dir_x_iat' in inner_comb:
-            seq_ds_name = 'dir_x_iat'
-            seq_input_name = 'dir_x_iat_input'
-        elif 'dir_iat_raw' in inner_comb:
-            seq_ds_name = 'dir_iat_raw'
-            seq_input_name = 'dir_iat_raw_input'
-            
-        meta_ds_name = 'metadata' if 'metadata' in inner_comb else None
-        meta_type = 'metadata'
-        wfmeta_k = 10
+    seq_ds_name = config["sequence_dataset"]
+    seq_input_name = config["sequence_input_name"]
+    meta_ds_name = config.get("metadata_dataset")
+    meta_type = config.get("metadata_type")
+    wfmeta_k = config.get("wfmeta_k", 10)
 
     # Stream data from H5 file batch by batch
     with h5py.File(data_file, 'r') as f:

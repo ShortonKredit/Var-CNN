@@ -65,3 +65,38 @@ The configurations set `var_cnn_max_epochs` based on the model groups:
 ### Git Synchronization
 * **Commit Hash**: `1e58c64` (Support levels 40 and 50 in Closed-World low-data evaluation)
 * Pushed successfully to `main` branch on GitHub.
+
+---
+
+## 5. Code Cleanup & Joint Mixture Removal
+
+We performed a major cleanup across the entire codebase to remove deprecated joint mixture (multi-branch feature combination) code, simplifying all execution pipelines to single-model config-driven training and Softmax Ensemble evaluation.
+
+### Backups Saved
+Prior to any modifications, original versions of the four modified files were backed up:
+* `var_cnn.py` $\rightarrow$ `backup/var_cnn.py.bak`
+* `run_model.py` $\rightarrow$ `backup/run_model.py.bak`
+* `data_generator.py` $\rightarrow$ `backup/data_generator.py.bak`
+* `evaluate.py` $\rightarrow$ `backup/evaluate.py.bak`
+
+### Files Modified
+* **[data_generator.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/data_generator.py)**:
+  - Removed `mixture_num` parameter from `generate()`.
+  - Deleted the legacy fallback `else:` block that mapped dataset names using the old mixture list.
+* **[var_cnn.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/var_cnn.py)**:
+  - Simplified `get_model(config)`: removed `mixture_num` and `sub_model_name`.
+  - Removed the `is_flat` flag and deleted the legacy `else:` block containing multi-branch input layers.
+* **[run_model.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/run_model.py)**:
+  - Removed the `is_valid_mixture()` function and all mixture loops.
+  - Simplified `train_and_val()` and `predict()` to only accept `config, model` (removed mixture parameters).
+  - Unified the entry point: if `model_name == 'df'`, it now imports and constructs the Deep Fingerprinting model directly via `df.get_model(config)`.
+* **[evaluate.py](file:///c:/Users/ADMIN/Desktop/Var-CNN/evaluate.py)**:
+  - Removed legacy mixture prediction aggregation blocks from `main()`.
+
+### Verification Results
+All four integration test suites executed successfully and passed:
+1. **Closed-World Standard Pipeline (`scratch/test_pipeline.py`)**: `PASS` (Dummy CW dataset compiled, model trained, predictions generated, and evaluation metrics computed successfully).
+2. **Closed-World Low-Data Pipeline (`scratch/test_lowdata_pipeline.py`)**: `PASS` (Indices correctly subsetted, models trained, and ensemble scores computed successfully).
+3. **Open-World Scratch Training (`scratch/test_ow_scratch.py`)**: `PASS` (Dummy OW dataset compiled, binary model trained from scratch, and 2-class metrics computed successfully).
+4. **Open-World Transfer Learning Retrain (`scratch/test_ow_binary.py`)**: `PASS` (Pre-trained 101-class model compiled, weights loaded, base layers frozen, binary Dense head attached, model retrained, and evaluated successfully).
+
