@@ -1,3 +1,0 @@
-# Mô tả Nhóm Thí Nghiệm Open-World
-
-Nhóm thí nghiệm thứ tư đánh giá mô hình trong kịch bản open-world. Ở kịch bản này, dữ liệu huấn luyện bao gồm cả trace thuộc các website trong danh sách mục tiêu và trace thuộc các website ngoài danh sách mục tiêu. Mỗi cấu hình mô hình được huấn luyện riêng trên dữ liệu open-world với đầu ra gồm 2 lớp, tương ứng với lớp website mục tiêu và lớp website ngoài mục tiêu. Tập kiểm thử cũng bao gồm hai nhóm dữ liệu này, trong đó các trace ngoài mục tiêu dùng để kiểm thử không chồng lặp với dữ liệu ngoài mục tiêu trong quá trình huấn luyện. Kết quả được phân tích thông qua Accuracy, Precision, Recall, F1-score, FPR, AUC và biểu đồ đánh đổi TPR/FPR.
